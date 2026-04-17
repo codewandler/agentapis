@@ -87,11 +87,15 @@ func WithMuxEventTransform(fn EventTransform) MuxOption {
 }
 
 func (c *MuxClient) Stream(ctx context.Context, req unified.Request) (<-chan StreamResult, error) {
+	return c.StreamWithOptions(ctx, req, StreamOptions{})
+}
+
+func (c *MuxClient) StreamWithOptions(ctx context.Context, req unified.Request, opts StreamOptions) (<-chan StreamResult, error) {
 	working := req
 	if err := applyRequestTransforms(ctx, &working, c.requestTransforms); err != nil {
 		return nil, fmt.Errorf("transform request: %w", err)
 	}
-	target, err := c.resolveTarget(ctx, &working)
+	target, err := c.resolveTarget(ctx, &working, opts.PreferredTarget)
 	if err != nil {
 		return nil, err
 	}
@@ -102,17 +106,17 @@ func (c *MuxClient) Stream(ctx context.Context, req unified.Request) (<-chan Str
 		if c.messages == nil {
 			return nil, fmt.Errorf("messages client is not configured")
 		}
-		upstream, err = c.messages.Stream(ctx, working)
+		upstream, err = c.messages.StreamWithOptions(ctx, working, opts)
 	case TargetCompletions:
 		if c.completions == nil {
 			return nil, fmt.Errorf("completions client is not configured")
 		}
-		upstream, err = c.completions.Stream(ctx, working)
+		upstream, err = c.completions.StreamWithOptions(ctx, working, opts)
 	case TargetResponses:
 		if c.responses == nil {
 			return nil, fmt.Errorf("responses client is not configured")
 		}
-		upstream, err = c.responses.Stream(ctx, working)
+		upstream, err = c.responses.StreamWithOptions(ctx, working, opts)
 	default:
 		return nil, fmt.Errorf("unsupported target %d", target)
 	}
@@ -141,7 +145,10 @@ func (c *MuxClient) Stream(ctx context.Context, req unified.Request) (<-chan Str
 	return out, nil
 }
 
-func (c *MuxClient) resolveTarget(ctx context.Context, req *unified.Request) (Target, error) {
+func (c *MuxClient) resolveTarget(ctx context.Context, req *unified.Request, preferred *Target) (Target, error) {
+	if preferred != nil {
+		return *preferred, nil
+	}
 	if c.targetResolver != nil {
 		return c.targetResolver(ctx, req)
 	}

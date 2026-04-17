@@ -14,11 +14,14 @@ type HTTPRequestMutator func(ctx context.Context, httpReq *http.Request, req *Re
 type EventTransform func(ctx context.Context, ev StreamEvent) (StreamEvent, bool, error)
 type RequestHook func(ctx context.Context, meta RequestMeta)
 type ResponseHook func(ctx context.Context, meta ResponseMeta)
+type ErrorParser = protocolcore.ErrorParser
 type Option func(*config)
 
 type config struct {
 	apiKey              string
 	baseURL             string
+	path                string
+	errorParser         ErrorParser
 	httpClient          *http.Client
 	headers             http.Header
 	headerFuncs         []HeaderFunc
@@ -58,6 +61,14 @@ func WithHTTPClient(client *http.Client) Option {
 			c.httpClient = client
 		}
 	}
+}
+
+func WithPath(path string) Option {
+	return func(c *config) { c.path = path }
+}
+
+func WithErrorParser(fn ErrorParser) Option {
+	return func(c *config) { c.errorParser = fn }
 }
 
 func WithHeader(key, value string) Option {

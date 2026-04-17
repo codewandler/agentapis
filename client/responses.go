@@ -10,7 +10,7 @@ import (
 )
 
 type responsesStreamer interface {
-	Stream(ctx context.Context, req responsesapi.Request) (<-chan responsesapi.StreamResult, error)
+	StreamWithOptions(ctx context.Context, req responsesapi.Request, opts responsesapi.CallOptions) (<-chan responsesapi.StreamResult, error)
 }
 
 type ResponsesClient struct {
@@ -32,6 +32,10 @@ func NewResponsesClient(protocol responsesStreamer, opts ...Option) *ResponsesCl
 }
 
 func (c *ResponsesClient) Stream(ctx context.Context, req unified.Request) (<-chan StreamResult, error) {
+	return c.StreamWithOptions(ctx, req, StreamOptions{})
+}
+
+func (c *ResponsesClient) StreamWithOptions(ctx context.Context, req unified.Request, opts StreamOptions) (<-chan StreamResult, error) {
 	working := req
 	if err := applyRequestTransforms(ctx, &working, c.requestTransforms); err != nil {
 		return nil, fmt.Errorf("transform request: %w", err)
@@ -40,7 +44,20 @@ func (c *ResponsesClient) Stream(ctx context.Context, req unified.Request) (<-ch
 	if err != nil {
 		return nil, fmt.Errorf("build responses request: %w", err)
 	}
-	upstream, err := c.protocol.Stream(ctx, *wire)
+	upstream, err := c.protocol.StreamWithOptions(ctx, *wire, responsesapi.CallOptions{
+		OnRequest: func(ctx context.Context, meta responsesapi.RequestMeta) error {
+			if opts.OnRequest == nil {
+				return nil
+			}
+			return opts.OnRequest(ctx, RequestMeta{Target: TargetResponses, Wire: meta.Wire, HTTP: meta.HTTP, Body: append([]byte(nil), meta.Body...)})
+		},
+		OnResponse: func(ctx context.Context, meta responsesapi.ResponseMeta) error {
+			if opts.OnResponse == nil {
+				return nil
+			}
+			return opts.OnResponse(ctx, ResponseMeta{Target: TargetResponses, Wire: meta.Wire, StatusCode: meta.StatusCode, Headers: meta.Headers.Clone()})
+		},
+	})
 	if err != nil {
 		return nil, err
 	}

@@ -61,3 +61,49 @@ func TestMessagesClientStreamsUnifiedEvents(t *testing.T) {
 		t.Fatalf("expected completed event, got %q", events[1].Type)
 	}
 }
+
+func TestMessagesClientStreamWithOptionsForwardsMetadata(t *testing.T) {
+	t.Parallel()
+
+	sseBody := "event: message_start\n" +
+		"data: {\"message\":{\"id\":\"msg_1\",\"model\":\"claude\",\"usage\":{\"input_tokens\":1}}}\n\n"
+
+	protocol := messagesapi.NewClient(
+		messagesapi.WithBaseURL("https://example.com"),
+		messagesapi.WithHTTPClient(&http.Client{Transport: FixedSSEResponse(http.StatusOK, sseBody)}),
+	)
+
+	client := NewMessagesClient(protocol)
+	var requestMeta RequestMeta
+	var responseMeta ResponseMeta
+
+	stream, err := client.StreamWithOptions(context.Background(), unified.Request{
+		Model:     "claude",
+		MaxTokens: 16,
+		Messages:  []unified.Message{{Role: unified.RoleUser, Parts: []unified.Part{{Type: unified.PartTypeText, Text: "hi"}}}},
+	}, StreamOptions{
+		OnRequest: func(_ context.Context, meta RequestMeta) error {
+			requestMeta = meta
+			return nil
+		},
+		OnResponse: func(_ context.Context, meta ResponseMeta) error {
+			responseMeta = meta
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("StreamWithOptions() error = %v", err)
+	}
+	for item := range stream {
+		if item.Err != nil {
+			t.Fatalf("unexpected stream error: %v", item.Err)
+		}
+	}
+
+	if requestMeta.Target != TargetMessages || requestMeta.HTTP == nil || len(requestMeta.Body) == 0 {
+		t.Fatalf("unexpected request meta: %#v", requestMeta)
+	}
+	if responseMeta.Target != TargetMessages || responseMeta.StatusCode != http.StatusOK {
+		t.Fatalf("unexpected response meta: %#v", responseMeta)
+	}
+}

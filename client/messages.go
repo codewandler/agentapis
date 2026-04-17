@@ -10,7 +10,7 @@ import (
 )
 
 type messagesStreamer interface {
-	Stream(ctx context.Context, req messagesapi.Request) (<-chan messagesapi.StreamResult, error)
+	StreamWithOptions(ctx context.Context, req messagesapi.Request, opts messagesapi.CallOptions) (<-chan messagesapi.StreamResult, error)
 }
 
 type MessagesClient struct {
@@ -32,6 +32,10 @@ func NewMessagesClient(protocol messagesStreamer, opts ...Option) *MessagesClien
 }
 
 func (c *MessagesClient) Stream(ctx context.Context, req unified.Request) (<-chan StreamResult, error) {
+	return c.StreamWithOptions(ctx, req, StreamOptions{})
+}
+
+func (c *MessagesClient) StreamWithOptions(ctx context.Context, req unified.Request, opts StreamOptions) (<-chan StreamResult, error) {
 	working := req
 	if err := applyRequestTransforms(ctx, &working, c.requestTransforms); err != nil {
 		return nil, fmt.Errorf("transform request: %w", err)
@@ -40,7 +44,20 @@ func (c *MessagesClient) Stream(ctx context.Context, req unified.Request) (<-cha
 	if err != nil {
 		return nil, fmt.Errorf("build messages request: %w", err)
 	}
-	upstream, err := c.protocol.Stream(ctx, *wire)
+	upstream, err := c.protocol.StreamWithOptions(ctx, *wire, messagesapi.CallOptions{
+		OnRequest: func(ctx context.Context, meta messagesapi.RequestMeta) error {
+			if opts.OnRequest == nil {
+				return nil
+			}
+			return opts.OnRequest(ctx, RequestMeta{Target: TargetMessages, Wire: meta.Wire, HTTP: meta.HTTP, Body: append([]byte(nil), meta.Body...)})
+		},
+		OnResponse: func(ctx context.Context, meta messagesapi.ResponseMeta) error {
+			if opts.OnResponse == nil {
+				return nil
+			}
+			return opts.OnResponse(ctx, ResponseMeta{Target: TargetMessages, Wire: meta.Wire, StatusCode: meta.StatusCode, Headers: meta.Headers.Clone()})
+		},
+	})
 	if err != nil {
 		return nil, err
 	}

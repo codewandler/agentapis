@@ -10,7 +10,7 @@ import (
 )
 
 type completionsStreamer interface {
-	Stream(ctx context.Context, req completionsapi.Request) (<-chan completionsapi.StreamResult, error)
+	StreamWithOptions(ctx context.Context, req completionsapi.Request, opts completionsapi.CallOptions) (<-chan completionsapi.StreamResult, error)
 }
 
 type CompletionsClient struct {
@@ -32,6 +32,10 @@ func NewCompletionsClient(protocol completionsStreamer, opts ...Option) *Complet
 }
 
 func (c *CompletionsClient) Stream(ctx context.Context, req unified.Request) (<-chan StreamResult, error) {
+	return c.StreamWithOptions(ctx, req, StreamOptions{})
+}
+
+func (c *CompletionsClient) StreamWithOptions(ctx context.Context, req unified.Request, opts StreamOptions) (<-chan StreamResult, error) {
 	working := req
 	if err := applyRequestTransforms(ctx, &working, c.requestTransforms); err != nil {
 		return nil, fmt.Errorf("transform request: %w", err)
@@ -40,7 +44,20 @@ func (c *CompletionsClient) Stream(ctx context.Context, req unified.Request) (<-
 	if err != nil {
 		return nil, fmt.Errorf("build completions request: %w", err)
 	}
-	upstream, err := c.protocol.Stream(ctx, *wire)
+	upstream, err := c.protocol.StreamWithOptions(ctx, *wire, completionsapi.CallOptions{
+		OnRequest: func(ctx context.Context, meta completionsapi.RequestMeta) error {
+			if opts.OnRequest == nil {
+				return nil
+			}
+			return opts.OnRequest(ctx, RequestMeta{Target: TargetCompletions, Wire: meta.Wire, HTTP: meta.HTTP, Body: append([]byte(nil), meta.Body...)})
+		},
+		OnResponse: func(ctx context.Context, meta completionsapi.ResponseMeta) error {
+			if opts.OnResponse == nil {
+				return nil
+			}
+			return opts.OnResponse(ctx, ResponseMeta{Target: TargetCompletions, Wire: meta.Wire, StatusCode: meta.StatusCode, Headers: meta.Headers.Clone()})
+		},
+	})
 	if err != nil {
 		return nil, err
 	}

@@ -1,9 +1,7 @@
 package protocolcore
 
 import (
-	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -15,52 +13,47 @@ type ExecuteConfig[Req any] struct {
 	HTTPClient    *http.Client
 	Logger        *slog.Logger
 	ErrorParser   ErrorParser
-	RequestHooks  []func(context.Context, RequestMeta[Req])
-	ResponseHooks []func(context.Context, ResponseMeta[Req])
+	RequestHooks  []func(context.Context, RequestMeta[Req]) error
+	ResponseHooks []func(context.Context, ResponseMeta[Req]) error
 }
 
-func ExecuteStream[Req any](ctx context.Context, cfg ExecuteConfig[Req], wire *Req, req HTTPRequest) (<-chan RawEvent, error) {
+func ExecuteStream[Req any](ctx context.Context, cfg ExecuteConfig[Req], wire *Req, httpReq *http.Request, body []byte) (<-chan RawEvent, error) {
 	httpClient := cfg.HTTPClient
 	if httpClient == nil {
 		httpClient = http.DefaultClient
 	}
-	method := req.Method
-	if method == "" {
-		method = http.MethodPost
-	}
-	httpReq, err := http.NewRequestWithContext(ctx, method, req.URL, bytes.NewReader(req.Body))
-	if err != nil {
-		return nil, fmt.Errorf("build HTTP request: %w", err)
-	}
-	httpReq.GetBody = func() (io.ReadCloser, error) {
-		return io.NopCloser(bytes.NewReader(req.Body)), nil
-	}
-	httpReq.ContentLength = int64(len(req.Body))
-	httpReq.Header = CloneHeaders(req.Headers)
 	if httpReq.Header.Get(HeaderContentType) == "" {
 		httpReq.Header.Set(HeaderContentType, ContentTypeJSON)
 	}
 	for _, hook := range cfg.RequestHooks {
 		if hook != nil {
-			hook(ctx, RequestMeta[Req]{Wire: wire, HTTP: httpReq, Body: append([]byte(nil), req.Body...)})
+			if err := hook(ctx, RequestMeta[Req]{Wire: wire, HTTP: httpReq, Body: append([]byte(nil), body...)}); err != nil {
+				return nil, err
+			}
 		}
 	}
 
 	resp, err := httpClient.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("send request: %w", err)
+		return nil, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		defer resp.Body.Close()
 		body, _ := io.ReadAll(resp.Body)
 		if cfg.ErrorParser != nil {
-			return nil, cfg.ErrorParser(resp.StatusCode, body)
+			parseErr := cfg.ErrorParser(resp.StatusCode, body)
+			if parseErr != nil {
+				return nil, &StatusError{StatusCode: resp.StatusCode, Body: body, Err: parseErr}
+			}
 		}
-		return nil, &HTTPError{StatusCode: resp.StatusCode, Body: body}
+		return nil, &StatusError{StatusCode: resp.StatusCode, Body: body}
 	}
 	for _, hook := range cfg.ResponseHooks {
 		if hook != nil {
-			hook(ctx, ResponseMeta[Req]{Wire: wire, StatusCode: resp.StatusCode, Headers: CloneHeaders(resp.Header)})
+			if err := hook(ctx, ResponseMeta[Req]{Wire: wire, StatusCode: resp.StatusCode, Headers: CloneHeaders(resp.Header)}); err != nil {
+				_ = resp.Body.Close()
+				return nil, err
+			}
 		}
 	}
 
