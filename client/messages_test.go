@@ -1,0 +1,63 @@
+package client
+
+import (
+	"context"
+	"net/http"
+	"testing"
+
+	messagesapi "github.com/codewandler/agentapis/api/messages"
+	"github.com/codewandler/agentapis/api/unified"
+)
+
+func TestMessagesClientStreamsUnifiedEvents(t *testing.T) {
+	t.Parallel()
+
+	sseBody := "event: message_start\n" +
+		"data: {\"message\":{\"id\":\"msg_1\",\"model\":\"claude\",\"usage\":{\"input_tokens\":1}}}\n\n" +
+		"event: message_delta\n" +
+		"data: {\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":2}}\n\n"
+
+	var gotWire messagesapi.Request
+	protocol := messagesapi.NewClient(
+		messagesapi.WithBaseURL("https://example.com"),
+		messagesapi.WithHTTPClient(&http.Client{Transport: FixedSSEResponse(http.StatusOK, sseBody)}),
+		messagesapi.WithRequestHook(func(_ context.Context, meta messagesapi.RequestMeta) { gotWire = *meta.Wire }),
+	)
+
+	client := NewMessagesClient(protocol,
+		WithRequestTransform(func(_ context.Context, req *unified.Request) error {
+			req.Model = "claude"
+			return nil
+		}),
+	)
+
+	stream, err := client.Stream(context.Background(), unified.Request{
+		Model:     "alias",
+		MaxTokens: 16,
+		Messages:  []unified.Message{{Role: unified.RoleUser, Parts: []unified.Part{{Type: unified.PartTypeText, Text: "hi"}}}},
+	})
+	if err != nil {
+		t.Fatalf("Stream() error = %v", err)
+	}
+
+	var events []unified.StreamEvent
+	for item := range stream {
+		if item.Err != nil {
+			t.Fatalf("unexpected stream error: %v", item.Err)
+		}
+		events = append(events, item.Event)
+	}
+
+	if gotWire.Model != "claude" {
+		t.Fatalf("expected transformed wire model, got %q", gotWire.Model)
+	}
+	if len(events) != 2 {
+		t.Fatalf("expected 2 unified events, got %d", len(events))
+	}
+	if events[0].Type != unified.StreamEventStarted {
+		t.Fatalf("expected started event, got %q", events[0].Type)
+	}
+	if events[1].Type != unified.StreamEventCompleted {
+		t.Fatalf("expected completed event, got %q", events[1].Type)
+	}
+}
