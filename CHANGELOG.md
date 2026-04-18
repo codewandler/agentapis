@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v0.2.2 - 2026-04-18
+
+- Fixed: Handle thinking parts in responses assistant messages (skip instead of reject, as thinking is controlled via request config)
+
 ## v0.2.1 - 2026-07-19
 
 - Fixed: Coerce temperature to 1 when adaptive thinking is enabled on Anthropic Messages API (required by API; non-zero non-1 temperatures are rejected)
