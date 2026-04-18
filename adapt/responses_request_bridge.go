@@ -333,7 +333,11 @@ func buildResponsesAssistantInputs(m unified.Message) ([]responses.Input, error)
 				Phase:     phase,
 			})
 		case p.Type == unified.PartTypeThinking:
-			return nil, fmt.Errorf("responses assistant message does not support thinking parts")
+			// Thinking parts are produced by reasoning models but are not
+			// echoed back as input in the Responses API. Reasoning is
+			// controlled by the request-level `reasoning` config; the model
+			// generates fresh reasoning each turn. Simply skip them.
+			continue
 		case p.Type == unified.PartTypeToolResult:
 			return nil, fmt.Errorf("responses assistant message does not support tool result parts")
 		default:
