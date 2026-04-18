@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v0.2.1 - 2026-07-19
+
+- Fixed: Coerce temperature to 1 when adaptive thinking is enabled on Anthropic Messages API (required by API; non-zero non-1 temperatures are rejected)
+
 ## v0.2.0 - 2026-04-17
 
 - Added per-call request and response metadata hooks across the typed protocol clients in `api/messages`, `api/completions`, and `api/responses`

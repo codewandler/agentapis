@@ -104,6 +104,11 @@ func BuildMessagesRequest(r unified.Request, opts ...MessagesOption) (*messages.
 		}
 		out.OutputConfig.Effort = string(e)
 	}
+	// Anthropic requires temperature=1 when adaptive thinking is enabled.
+	// Coerce any explicitly set non-1 temperature to 1; leave zero (omitted) alone.
+	if out.Thinking != nil && out.Thinking.Type == "adaptive" && out.Temperature != 0 && out.Temperature != 1 {
+		out.Temperature = 1
+	}
 
 	for _, m := range r.Messages {
 		msgIndex := len(out.System) + len(out.Messages)
