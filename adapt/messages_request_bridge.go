@@ -104,9 +104,9 @@ func BuildMessagesRequest(r unified.Request, opts ...MessagesOption) (*messages.
 		}
 		out.OutputConfig.Effort = string(e)
 	}
-	// Anthropic requires temperature=1 when adaptive thinking is enabled.
+	// Anthropic requires temperature=1 when any form of thinking is enabled.
 	// Coerce any explicitly set non-1 temperature to 1; leave zero (omitted) alone.
-	if out.Thinking != nil && out.Thinking.Type == "adaptive" && out.Temperature != 0 && out.Temperature != 1 {
+	if out.Thinking != nil && out.Thinking.Type != "disabled" && out.Temperature != 0 && out.Temperature != 1 {
 		out.Temperature = 1
 	}
 
