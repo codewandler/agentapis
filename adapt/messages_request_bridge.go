@@ -104,11 +104,6 @@ func BuildMessagesRequest(r unified.Request, opts ...MessagesOption) (*messages.
 		}
 		out.OutputConfig.Effort = string(e)
 	}
-	// Anthropic requires temperature=1 when any form of thinking is enabled.
-	// Coerce any explicitly set non-1 temperature to 1; leave zero (omitted) alone.
-	if out.Thinking != nil && out.Thinking.Type != "disabled" && out.Temperature != 0 && out.Temperature != 1 {
-		out.Temperature = 1
-	}
 
 	for _, m := range r.Messages {
 		msgIndex := len(out.System) + len(out.Messages)
@@ -395,7 +390,7 @@ func messagesThinkingFromRequest(r unified.Request, extras *unified.MessagesExtr
 	} else if caps.SupportsAdaptiveThinking {
 		thinking = &messages.ThinkingConfig{Type: "adaptive", Display: caps.DefaultThinkingDisplay}
 	} else {
-		thinking = &messages.ThinkingConfig{Type: "enabled", BudgetTokens: effortToBudget(r.Effort), Display: caps.DefaultThinkingDisplay}
+		thinking = &messages.ThinkingConfig{Type: "enabled", BudgetTokens: effortToBudget(r.Effort, r.MaxTokens), Display: caps.DefaultThinkingDisplay}
 	}
 	if extras != nil && extras.ThinkingDisplay != "" {
 		thinking.Display = extras.ThinkingDisplay
@@ -403,19 +398,37 @@ func messagesThinkingFromRequest(r unified.Request, extras *unified.MessagesExtr
 	return thinking
 }
 
-func effortToBudget(e unified.Effort) int {
+func effortToBudget(e unified.Effort, maxTokens int) int {
+	base := 0
 	switch e {
 	case unified.EffortLow:
-		return 1024
+		base = 1024
 	case unified.EffortMedium, unified.EffortUnspecified:
-		return 31999
+		base = 4096
 	case unified.EffortHigh:
-		return 31999
+		base = 8192
 	case unified.EffortMax:
-		return 31999
+		base = 16384
 	default:
-		return 31999
+		base = 4096
 	}
+	if maxTokens <= 0 {
+		return base
+	}
+	capBudget := maxTokens / 2
+	if capBudget < 0 {
+		capBudget = 0
+	}
+	if base > capBudget {
+		base = capBudget
+	}
+	if base >= maxTokens {
+		base = maxTokens - 1
+	}
+	if base < 0 {
+		base = 0
+	}
+	return base
 }
 
 func toolChoiceFromMessages(v any) unified.ToolChoice {
