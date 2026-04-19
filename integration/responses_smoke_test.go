@@ -1,5 +1,3 @@
-//go:build integration
-
 package integration
 
 import (
@@ -12,12 +10,18 @@ import (
 	responsesapi "github.com/codewandler/agentapis/api/responses"
 	"github.com/codewandler/agentapis/api/unified"
 	"github.com/codewandler/agentapis/client"
+	"github.com/stretchr/testify/require"
+)
+
+const (
+	defaultOpenRouterBaseURL = "https://openrouter.ai/api"
+	defaultOpenRouterModel   = "openai/gpt-4o-mini"
+	openRouterSmokePrompt    = "Reply with exactly the word pong."
+	openRouterSmokeTimeout   = 90 * time.Second
 )
 
 func TestSmokeOpenRouterResponses(t *testing.T) {
-	if os.Getenv("RUN_INTEGRATION") != "1" {
-		t.Skip("set RUN_INTEGRATION=1 to run integration smoke tests")
-	}
+	skipIntegrationIfNotEnabled(t)
 	apiKey := os.Getenv("OPENROUTER_API_KEY")
 	if apiKey == "" {
 		t.Skip("set OPENROUTER_API_KEY to run OpenRouter smoke tests")
@@ -25,11 +29,11 @@ func TestSmokeOpenRouterResponses(t *testing.T) {
 
 	baseURL := os.Getenv("OPENROUTER_BASE_URL")
 	if baseURL == "" {
-		baseURL = "https://openrouter.ai/api"
+		baseURL = defaultOpenRouterBaseURL
 	}
 	model := os.Getenv("OPENROUTER_MODEL")
 	if model == "" {
-		model = "openai/gpt-4o-mini"
+		model = defaultOpenRouterModel
 	}
 
 	protocol := responsesapi.NewClient(
@@ -38,33 +42,22 @@ func TestSmokeOpenRouterResponses(t *testing.T) {
 	)
 	uclient := client.NewResponsesClient(protocol)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), openRouterSmokeTimeout)
 	defer cancel()
 
 	stream, err := uclient.Stream(ctx, unified.Request{
 		Model:     model,
 		MaxTokens: 32,
-		Messages: []unified.Message{{
-			Role:  unified.RoleUser,
-			Parts: []unified.Part{{Type: unified.PartTypeText, Text: "Reply with exactly the word pong."}},
-		}},
+		Messages:  []unified.Message{{Role: unified.RoleUser, Parts: []unified.Part{{Type: unified.PartTypeText, Text: openRouterSmokePrompt}}}},
 	})
-	if err != nil {
-		t.Fatalf("Stream() error = %v", err)
-	}
+	require.NoError(t, err)
 
-	var (
-		sawStarted   bool
-		sawContent   bool
-		sawCompleted bool
-		text         strings.Builder
-		rawEvents    []string
-	)
+	var sawStarted, sawContent, sawCompleted bool
+	var text strings.Builder
+	var rawEvents []string
 
 	for item := range stream {
-		if item.Err != nil {
-			t.Fatalf("unexpected stream error: %v (raw events: %v)", item.Err, rawEvents)
-		}
+		require.NoErrorf(t, item.Err, "raw events: %v", rawEvents)
 		if item.RawEventName != "" {
 			rawEvents = append(rawEvents, item.RawEventName)
 		}
@@ -86,16 +79,8 @@ func TestSmokeOpenRouterResponses(t *testing.T) {
 		}
 	}
 
-	if !sawStarted {
-		t.Fatalf("expected a started event, raw events: %v", rawEvents)
-	}
-	if !sawContent {
-		t.Fatalf("expected content-bearing events, raw events: %v", rawEvents)
-	}
-	if !sawCompleted {
-		t.Fatalf("expected a completed event, raw events: %v", rawEvents)
-	}
-	if !strings.Contains(strings.ToLower(text.String()), "pong") {
-		t.Fatalf("expected streamed text to contain pong, got %q (raw events: %v)", text.String(), rawEvents)
-	}
+	require.Truef(t, sawStarted, "expected a started event, raw events: %v", rawEvents)
+	require.Truef(t, sawContent, "expected content-bearing events, raw events: %v", rawEvents)
+	require.Truef(t, sawCompleted, "expected a completed event, raw events: %v", rawEvents)
+	require.Containsf(t, strings.ToLower(text.String()), "pong", "expected streamed text to contain pong, got %q (raw events: %v)", text.String(), rawEvents)
 }

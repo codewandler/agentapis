@@ -162,3 +162,21 @@ func ensureMessagesCachePartIndexMap(in map[int]int) map[int]int {
 	}
 	return map[int]int{}
 }
+
+func mustJSON(v any) string {
+	if v == nil {
+		return ""
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
+func ensureOllamaExtras(r *unified.Request) *unified.OllamaExtras {
+	if r.Extras.Ollama == nil {
+		r.Extras.Ollama = &unified.OllamaExtras{}
+	}
+	return r.Extras.Ollama
+}

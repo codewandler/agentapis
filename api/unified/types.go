@@ -385,6 +385,7 @@ type RequestExtras struct {
 	Messages    *MessagesExtras    `json:"messages,omitempty"`
 	Completions *CompletionsExtras `json:"completions,omitempty"`
 	Responses   *ResponsesExtras   `json:"responses,omitempty"`
+	Ollama      *OllamaExtras      `json:"ollama,omitempty"`
 	Provider    map[string]any     `json:"provider,omitempty"`
 }
 
@@ -421,6 +422,14 @@ type ResponsesExtras struct {
 	UseInstructions      *bool          `json:"use_instructions,omitempty"`
 	UsedMaxTokenField    string         `json:"used_max_token_field,omitempty"`
 	ExtraMetadata        map[string]any `json:"extra_metadata,omitempty"`
+}
+
+type OllamaExtras struct {
+	ThinkLevel  string         `json:"think_level,omitempty"`
+	KeepAlive   any            `json:"keep_alive,omitempty"`
+	Options     map[string]any `json:"options,omitempty"`
+	LogProbs    bool           `json:"logprobs,omitempty"`
+	TopLogProbs int            `json:"top_logprobs,omitempty"`
 }
 
 type CacheControl struct {

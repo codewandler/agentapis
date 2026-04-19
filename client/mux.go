@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/codewandler/agentapis/api/unified"
 )
@@ -13,9 +14,62 @@ const (
 	TargetMessages Target = iota
 	TargetCompletions
 	TargetResponses
+	TargetOllama
 )
 
 type TargetResolver func(ctx context.Context, req *unified.Request) (Target, error)
+
+func (t Target) String() string {
+	switch t {
+	case TargetMessages:
+		return "messages"
+	case TargetCompletions:
+		return "completions"
+	case TargetResponses:
+		return "responses"
+	case TargetOllama:
+		return "ollama"
+	default:
+		return fmt.Sprintf("target(%d)", int(t))
+	}
+}
+
+// DefaultTargetResolver is an opt-in heuristic resolver for common provider/model hints.
+// It prefers explicit provider hints in req.Extras.Provider and otherwise uses model prefixes
+// where those prefixes are unambiguous.
+func DefaultTargetResolver(_ context.Context, req *unified.Request) (Target, error) {
+	if req == nil {
+		return 0, fmt.Errorf("request is nil")
+	}
+	if req.Extras.Provider != nil {
+		for _, key := range []string{"target", "provider", "api"} {
+			if raw, ok := req.Extras.Provider[key]; ok {
+				if s, ok := raw.(string); ok {
+					switch strings.ToLower(strings.TrimSpace(s)) {
+					case "messages", "anthropic":
+						return TargetMessages, nil
+					case "completions", "chat_completions":
+						return TargetCompletions, nil
+					case "responses", "openai":
+						return TargetResponses, nil
+					case "ollama":
+						return TargetOllama, nil
+					}
+				}
+			}
+		}
+	}
+	model := strings.ToLower(strings.TrimSpace(req.Model))
+	switch {
+	case strings.HasPrefix(model, "anthropic/") || strings.HasPrefix(model, "claude"):
+		return TargetMessages, nil
+	case strings.HasPrefix(model, "ollama/"):
+		return TargetOllama, nil
+	default:
+		return 0, fmt.Errorf("default target resolver could not infer target for model %q", req.Model)
+	}
+}
+
 
 type MuxOption func(*muxConfig)
 
@@ -23,6 +77,7 @@ type muxConfig struct {
 	messages          *MessagesClient
 	completions       *CompletionsClient
 	responses         *ResponsesClient
+	ollama            *OllamaClient
 	targetResolver    TargetResolver
 	requestTransforms []RequestTransform
 	eventTransforms   []EventTransform
@@ -32,6 +87,7 @@ type MuxClient struct {
 	messages          *MessagesClient
 	completions       *CompletionsClient
 	responses         *ResponsesClient
+	ollama            *OllamaClient
 	targetResolver    TargetResolver
 	requestTransforms []RequestTransform
 	eventTransforms   []EventTransform
@@ -48,6 +104,7 @@ func NewMuxClient(opts ...MuxOption) *MuxClient {
 		messages:          cfg.messages,
 		completions:       cfg.completions,
 		responses:         cfg.responses,
+		ollama:            cfg.ollama,
 		targetResolver:    cfg.targetResolver,
 		requestTransforms: append([]RequestTransform(nil), cfg.requestTransforms...),
 		eventTransforms:   append([]EventTransform(nil), cfg.eventTransforms...),
@@ -64,6 +121,10 @@ func WithCompletionsClient(client *CompletionsClient) MuxOption {
 
 func WithResponsesClient(client *ResponsesClient) MuxOption {
 	return func(c *muxConfig) { c.responses = client }
+}
+
+func WithOllamaClient(client *OllamaClient) MuxOption {
+	return func(c *muxConfig) { c.ollama = client }
 }
 
 func WithTargetResolver(resolver TargetResolver) MuxOption {
@@ -117,6 +178,11 @@ func (c *MuxClient) StreamWithOptions(ctx context.Context, req unified.Request, 
 			return nil, fmt.Errorf("responses client is not configured")
 		}
 		upstream, err = c.responses.StreamWithOptions(ctx, working, opts)
+	case TargetOllama:
+		if c.ollama == nil {
+			return nil, fmt.Errorf("ollama client is not configured")
+		}
+		upstream, err = c.ollama.StreamWithOptions(ctx, working, opts)
 	default:
 		return nil, fmt.Errorf("unsupported target %d", target)
 	}
@@ -165,6 +231,10 @@ func (c *MuxClient) resolveTarget(ctx context.Context, req *unified.Request, pre
 	if c.responses != nil {
 		configured++
 		target = TargetResponses
+	}
+	if c.ollama != nil {
+		configured++
+		target = TargetOllama
 	}
 	if configured == 1 {
 		return target, nil

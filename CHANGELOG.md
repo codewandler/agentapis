@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## v0.3.0 - 2026-04-19
+
+- Added a first-class native Ollama integration in `api/ollama` with NDJSON streaming, `/api/chat` support, and `/api/tags` model listing
+- Added Ollama request and stream bridges in `adapt`, including native thinking, tool calling, JSON output modes, and Ollama-specific extras
+- Added `client.OllamaClient`, mux support for `TargetOllama`, and an opt-in default target resolver heuristic for Ollama model/provider hints
+- Added integration smoke coverage for native Ollama responses and tool calling, plus Ollama compatibility coverage for `/v1/responses` tool calling
+- Updated integration test ergonomics to use runtime gating via `TEST_INTEGRATION=1`, shared helper logic, and Ollama reachability checks instead of build tags
+- Updated README and AGENTS documentation for Ollama support, integration testing, and mux routing
+
 ## v0.2.2 - 2026-04-18
 
 - Fixed: Handle thinking parts in responses assistant messages (skip instead of reject, as thinking is controlled via request config)
