@@ -66,7 +66,8 @@ func (m *OllamaMapper) MapEvent(ev *ollama.Response) (unified.StreamEvent, bool,
 	if ev.Done {
 		out := unified.StreamEvent{Type: unified.StreamEventCompleted, Completed: &unified.Completed{StopReason: mapOllamaDoneReason(ev.DoneReason)}}
 		if ev.PromptEvalCount > 0 || ev.EvalCount > 0 {
-			out.Usage = &unified.StreamUsage{Provider: "ollama", Model: ev.Model, RequestID: ref.ResponseID, Tokens: unified.TokenItems{{Kind: unified.TokenKindInput, Count: ev.PromptEvalCount}, {Kind: unified.TokenKindOutput, Count: ev.EvalCount}}.NonZero()}
+			tokens := unified.TokenItems{{Kind: unified.TokenKindInputNew, Count: ev.PromptEvalCount}, {Kind: unified.TokenKindOutput, Count: ev.EvalCount}}.NonZero()
+			out.Usage = &unified.StreamUsage{Provider: "ollama", Model: ev.Model, RequestID: ref.ResponseID, Input: tokens.InputTokens(), Output: tokens.OutputTokens(), Tokens: tokens}
 		}
 		if ev.DoneReason != "" && out.Extras.Provider == nil {
 			out.Extras.Provider = map[string]any{"done_reason": ev.DoneReason}

@@ -47,13 +47,13 @@ func TestMapMessagesEventMessageStartIncludesUsage(t *testing.T) {
 	if event.Usage == nil {
 		t.Fatalf("expected usage payload")
 	}
-	if got := event.Usage.Tokens.Count(unified.TokenKindInput); got != 10 {
+	if got := event.Usage.Tokens.Count(unified.TokenKindInputNew); got != 10 {
 		t.Fatalf("expected 10 input tokens, got %d", got)
 	}
-	if got := event.Usage.Tokens.Count(unified.TokenKindCacheWrite); got != 2 {
+	if got := event.Usage.Tokens.Count(unified.TokenKindInputCacheWrite); got != 2 {
 		t.Fatalf("expected 2 cache write tokens, got %d", got)
 	}
-	if got := event.Usage.Tokens.Count(unified.TokenKindCacheRead); got != 1 {
+	if got := event.Usage.Tokens.Count(unified.TokenKindInputCacheRead); got != 1 {
 		t.Fatalf("expected 1 cache read token, got %d", got)
 	}
 }

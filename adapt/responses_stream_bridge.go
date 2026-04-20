@@ -245,14 +245,24 @@ func usageFromResponses(u *responses.ResponseUsage) *unified.StreamUsage {
 	if u == nil {
 		return nil
 	}
-	tokens := unified.TokenItems{{Kind: unified.TokenKindInput, Count: u.InputTokens}, {Kind: unified.TokenKindOutput, Count: u.OutputTokens}}
-	if u.InputTokensDetails != nil && u.InputTokensDetails.CachedTokens > 0 {
-		tokens = append(tokens, unified.TokenItem{Kind: unified.TokenKindCacheRead, Count: u.InputTokensDetails.CachedTokens})
+	cacheRead := 0
+	if u.InputTokensDetails != nil {
+		cacheRead = u.InputTokensDetails.CachedTokens
+	}
+	newInput := u.InputTokens - cacheRead
+	if newInput < 0 {
+		newInput = 0
+	}
+	tokens := unified.TokenItems{
+		{Kind: unified.TokenKindInputNew, Count: newInput},
+		{Kind: unified.TokenKindInputCacheRead, Count: cacheRead},
+		{Kind: unified.TokenKindOutput, Count: u.OutputTokens},
 	}
 	if u.OutputTokensDetails != nil && u.OutputTokensDetails.ReasoningTokens > 0 {
-		tokens = append(tokens, unified.TokenItem{Kind: unified.TokenKindReasoning, Count: u.OutputTokensDetails.ReasoningTokens})
+		tokens = append(tokens, unified.TokenItem{Kind: unified.TokenKindOutputReasoning, Count: u.OutputTokensDetails.ReasoningTokens})
 	}
-	return &unified.StreamUsage{Tokens: tokens.NonZero()}
+	tokens = tokens.NonZero()
+	return &unified.StreamUsage{Input: tokens.InputTokens(), Output: tokens.OutputTokens(), Tokens: tokens}
 }
 
 func mapResponsesIncompleteReason(d *responses.IncompleteDetails) unified.StopReason {

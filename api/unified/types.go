@@ -180,14 +180,21 @@ func (p AssistantPhase) IsEmpty() bool { return p == "" }
 
 // === Token Usage ===
 
+// TokenKind classifies token counts in provider-native detail while preserving
+// enough structure to derive canonical unified input/output usage.
 type TokenKind string
 
 const (
-	TokenKindInput      TokenKind = "input"
-	TokenKindOutput     TokenKind = "output"
-	TokenKindCacheRead  TokenKind = "cache_read"
-	TokenKindCacheWrite TokenKind = "cache_write"
-	TokenKindReasoning  TokenKind = "reasoning"
+	// TokenKindInputNew is the newly processed portion of request input tokens.
+	TokenKindInputNew TokenKind = "input.new"
+	// TokenKindInputCacheRead is the portion of request input tokens served from cache.
+	TokenKindInputCacheRead TokenKind = "input.cache_read"
+	// TokenKindInputCacheWrite is the portion of request input tokens newly written to cache.
+	TokenKindInputCacheWrite TokenKind = "input.cache_write"
+	// TokenKindOutputReasoning is the provider-reported reasoning/thinking subset of output tokens.
+	TokenKindOutputReasoning TokenKind = "output.reasoning"
+	// TokenKindOutput is total output tokens as reported by the upstream provider.
+	TokenKindOutput TokenKind = "output"
 )
 
 type TokenItem struct {
@@ -196,6 +203,25 @@ type TokenItem struct {
 }
 
 type TokenItems []TokenItem
+
+// InputTokens is the canonical unified breakdown for request input tokens.
+// The invariant is: Total = CacheRead + CacheWrite + New.
+// New is the newly processed portion of request input, excluding cache reads
+// and excluding cache-write-accounted tokens.
+type InputTokens struct {
+	Total      int `json:"total"`
+	CacheRead  int `json:"cache_read"`
+	CacheWrite int `json:"cache_write"`
+	New        int `json:"new"`
+}
+
+// OutputTokens is the canonical unified breakdown for response output tokens.
+// Total is the full provider-reported output token count and Reasoning is the
+// provider-reported reasoning subset when available.
+type OutputTokens struct {
+	Total     int `json:"total"`
+	Reasoning int `json:"reasoning"`
+}
 
 func (t TokenItems) Count(kind TokenKind) int {
 	for _, item := range t {
@@ -206,12 +232,33 @@ func (t TokenItems) Count(kind TokenKind) int {
 	return 0
 }
 
+// InputTokens derives canonical unified input usage from token items.
+func (t TokenItems) InputTokens() InputTokens {
+	newInput := t.Count(TokenKindInputNew)
+	cacheRead := t.Count(TokenKindInputCacheRead)
+	cacheWrite := t.Count(TokenKindInputCacheWrite)
+	return InputTokens{
+		Total:      newInput + cacheRead + cacheWrite,
+		CacheRead:  cacheRead,
+		CacheWrite: cacheWrite,
+		New:        newInput,
+	}
+}
+
+// OutputTokens derives canonical unified output usage from token items.
+func (t TokenItems) OutputTokens() OutputTokens {
+	return OutputTokens{
+		Total:     t.Count(TokenKindOutput),
+		Reasoning: t.Count(TokenKindOutputReasoning),
+	}
+}
+
 func (t TokenItems) TotalInput() int {
-	return t.Count(TokenKindInput) + t.Count(TokenKindCacheRead) + t.Count(TokenKindCacheWrite)
+	return t.InputTokens().Total
 }
 
 func (t TokenItems) TotalOutput() int {
-	return t.Count(TokenKindOutput) + t.Count(TokenKindReasoning)
+	return t.OutputTokens().Total
 }
 
 func (t TokenItems) Total() int {
@@ -233,14 +280,14 @@ func (t TokenItems) NonZero() TokenItems {
 type CostKind string
 
 const (
-	CostKindInput      CostKind = "input"
-	CostKindOutput     CostKind = "output"
-	CostKindCacheRead  CostKind = "cache_read"
-	CostKindCacheWrite CostKind = "cache_write"
-	CostKindReasoning  CostKind = "reasoning"
-	CostKindImage      CostKind = "image"
-	CostKindAudio      CostKind = "audio"
-	CostKindVideo      CostKind = "video"
+	CostKindInput           CostKind = "input"
+	CostKindInputCacheRead  CostKind = "input.cache_read"
+	CostKindInputCacheWrite CostKind = "input.cache_write"
+	CostKindOutput          CostKind = "output"
+	CostKindReasoning       CostKind = "reasoning"
+	CostKindImage           CostKind = "image"
+	CostKindAudio           CostKind = "audio"
+	CostKindVideo           CostKind = "video"
 )
 
 type CostItem struct {
@@ -248,6 +295,8 @@ type CostItem struct {
 	Amount float64  `json:"amount"`
 }
 
+// CostItems is an optional monetary breakdown. Token normalization is canonical
+// and may be present even when no runtime pricing/cost derivation is available.
 type CostItems []CostItem
 
 func (c CostItems) Total() float64 {
@@ -485,10 +534,14 @@ type ContentPart struct {
 	Index int  `json:"index,omitempty"`
 }
 
+// StreamUsage carries canonical usage plus the original token/cost detail.
+// Costs are optional and may be omitted even when token usage is fully normalized.
 type StreamUsage struct {
 	Provider   string         `json:"provider,omitempty"`
 	Model      string         `json:"model,omitempty"`
 	RequestID  string         `json:"request_id,omitempty"`
+	Input      InputTokens    `json:"input"`
+	Output     OutputTokens   `json:"output"`
 	Tokens     TokenItems     `json:"tokens,omitempty"`
 	Costs      CostItems      `json:"costs,omitempty"`
 	RecordedAt time.Time      `json:"recorded_at,omitempty"`
@@ -635,8 +688,13 @@ func NewCompletedEvent(reason StopReason) StreamEvent {
 
 func NewUsageEvent(tokens TokenItems, costs CostItems) StreamEvent {
 	return StreamEvent{
-		Type:  StreamEventUsage,
-		Usage: &StreamUsage{Tokens: tokens, Costs: costs},
+		Type: StreamEventUsage,
+		Usage: &StreamUsage{
+			Input:  tokens.InputTokens(),
+			Output: tokens.OutputTokens(),
+			Tokens: tokens,
+			Costs:  costs,
+		},
 	}
 }
 

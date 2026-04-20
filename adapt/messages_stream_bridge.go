@@ -15,7 +15,7 @@ func MapMessagesEvent(ev messages.StreamEvent) (unified.StreamEvent, bool, error
 		return withRawEventPayload(withRawEventName(unified.StreamEvent{
 			Type:    unified.StreamEventStarted,
 			Started: &unified.Started{RequestID: e.Message.ID, Model: e.Message.Model},
-			Usage:   &unified.StreamUsage{Tokens: usageFromMessages(e.Message.Usage)},
+			Usage:   usageFromMessages(e.Message.Usage),
 		}, messages.EventMessageStart), source), false, nil
 
 	case *messages.ContentBlockStartEvent:
@@ -151,12 +151,12 @@ func MapMessagesEvent(ev messages.StreamEvent) (unified.StreamEvent, bool, error
 		return withRawEventPayload(withRawEventName(unified.StreamEvent{
 			Type:      unified.StreamEventCompleted,
 			Completed: &unified.Completed{StopReason: mapMessagesStopReason(e.Delta.StopReason)},
-			Usage: &unified.StreamUsage{Tokens: usageFromMessagesFields(
+			Usage: usageFromMessagesFields(
 				e.Usage.InputTokens,
 				e.Usage.CacheCreationInputTokens,
 				e.Usage.CacheReadInputTokens,
 				e.Usage.OutputTokens,
-			)},
+			),
 		}, messages.EventMessageDelta), source), false, nil
 
 	case *messages.StreamErrorEvent:
@@ -204,15 +204,16 @@ func mapMessagesStopReason(s string) unified.StopReason {
 	}
 }
 
-func usageFromMessages(u messages.MessageUsage) unified.TokenItems {
+func usageFromMessages(u messages.MessageUsage) *unified.StreamUsage {
 	return usageFromMessagesFields(u.InputTokens, u.CacheCreationInputTokens, u.CacheReadInputTokens, 0)
 }
 
-func usageFromMessagesFields(input, cacheWrite, cacheRead, output int) unified.TokenItems {
-	return unified.TokenItems{
-		{Kind: unified.TokenKindInput, Count: input},
-		{Kind: unified.TokenKindCacheWrite, Count: cacheWrite},
-		{Kind: unified.TokenKindCacheRead, Count: cacheRead},
+func usageFromMessagesFields(input, cacheWrite, cacheRead, output int) *unified.StreamUsage {
+	tokens := unified.TokenItems{
+		{Kind: unified.TokenKindInputNew, Count: input},
+		{Kind: unified.TokenKindInputCacheWrite, Count: cacheWrite},
+		{Kind: unified.TokenKindInputCacheRead, Count: cacheRead},
 		{Kind: unified.TokenKindOutput, Count: output},
 	}.NonZero()
+	return &unified.StreamUsage{Input: tokens.InputTokens(), Output: tokens.OutputTokens(), Tokens: tokens}
 }

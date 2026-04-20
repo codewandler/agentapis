@@ -19,12 +19,26 @@ func MapCompletionsEvent(chunk *completions.Chunk) (unified.StreamEvent, bool, e
 	}
 
 	if chunk.Usage != nil {
+		cacheRead := 0
+		reasoning := 0
+		if chunk.Usage.PromptTokensDetails != nil {
+			cacheRead = chunk.Usage.PromptTokensDetails.CachedTokens
+		}
+		if chunk.Usage.CompletionTokensDetails != nil {
+			reasoning = chunk.Usage.CompletionTokensDetails.ReasoningTokens
+		}
+		newInput := chunk.Usage.PromptTokens - cacheRead
+		if newInput < 0 {
+			newInput = 0
+		}
 		tokens := unified.TokenItems{
-			{Kind: unified.TokenKindInput, Count: chunk.Usage.PromptTokens},
+			{Kind: unified.TokenKindInputNew, Count: newInput},
+			{Kind: unified.TokenKindInputCacheRead, Count: cacheRead},
 			{Kind: unified.TokenKindOutput, Count: chunk.Usage.CompletionTokens},
+			{Kind: unified.TokenKindOutputReasoning, Count: reasoning},
 		}.NonZero()
 		out.Type = unified.StreamEventUsage
-		out.Usage = &unified.StreamUsage{Tokens: tokens}
+		out.Usage = &unified.StreamUsage{Input: tokens.InputTokens(), Output: tokens.OutputTokens(), Tokens: tokens}
 	}
 
 	if len(chunk.Choices) > 0 {

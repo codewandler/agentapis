@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## v0.3.1 - 2026-04-20
+
+- normalize unified stream usage into structured input/output token breakdowns
+- map Anthropic Messages input usage as new + cache read + cache write with canonical total
+- map OpenAI Responses and Chat Completions cached and reasoning token details into unified usage
+- add invariant and edge-case tests for token usage normalization and clamping
+- document optional runtime cost breakdowns alongside canonical token usage
+
 ## v0.3.0 - 2026-04-19
 
 - Added a first-class native Ollama integration in `api/ollama` with NDJSON streaming, `/api/chat` support, and `/api/tags` model listing
