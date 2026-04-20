@@ -50,6 +50,7 @@ func MapCompletionsEvent(chunk *completions.Chunk) (unified.StreamEvent, bool, e
 		if choice.Delta.Content != "" {
 			out.Type = unified.StreamEventContentDelta
 			out.ContentDelta = &unified.ContentDelta{ContentBase: unified.ContentBase{
+				Ref:      unified.StreamRef{ResponseID: chunk.ID},
 				Kind:     unified.ContentKindText,
 				Variant:  unified.ContentVariantPrimary,
 				Encoding: unified.ContentEncodingUTF8,
@@ -59,13 +60,14 @@ func MapCompletionsEvent(chunk *completions.Chunk) (unified.StreamEvent, bool, e
 		}
 		if len(choice.Delta.ToolCalls) > 0 {
 			tc := choice.Delta.ToolCalls[0]
-			ref := unified.StreamRef{ItemIndex: uint32Ptr(tc.Index)}
+			ref := unified.StreamRef{ResponseID: chunk.ID, ItemIndex: uint32Ptr(tc.Index)}
 			out.Type = unified.StreamEventToolDelta
 			out.ToolDelta = &unified.ToolDelta{Ref: ref, Kind: unified.ToolDeltaKindFunctionArguments, ToolID: tc.ID, ToolName: tc.Function.Name, Data: tc.Function.Arguments}
 			out.Delta = &unified.Delta{Kind: unified.DeltaKindTool, Index: ref.ItemIndex, ToolID: tc.ID, ToolName: tc.Function.Name, ToolArgs: tc.Function.Arguments}
 		}
 		if choice.FinishReason != nil {
 			out.Type = unified.StreamEventCompleted
+			out.Lifecycle = &unified.Lifecycle{Scope: unified.LifecycleScopeResponse, State: unified.LifecycleStateDone, Ref: unified.StreamRef{ResponseID: chunk.ID}}
 			out.Completed = &unified.Completed{StopReason: mapOpenAIFinishReason(*choice.FinishReason)}
 		}
 	}

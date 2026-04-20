@@ -2,12 +2,14 @@
 
 ## Overview
 
-This repository has four layers:
+This repository has six layers:
 
-1. Typed protocol clients in `api/messages`, `api/completions`, and `api/responses`
+1. Typed protocol clients in `api/messages`, `api/completions`, `api/responses`, `api/ollama`
 2. Canonical request and stream event types in `api/unified`
 3. Translation bridges in `adapt`
 4. Unified wrapper clients and runtime backend selection in `client`
+5. Stateful canonical session management and replay/native strategy handling in `conversation`
+6. Provider/service-specific policy helpers such as `api/openrouter`
 
 Shared HTTP, retry, and SSE execution lives in `internal/protocolcore`.
 
@@ -19,7 +21,7 @@ Each protocol package exposes:
 - a typed streaming client
 - typed hooks for request transforms, HTTP mutation, event transforms, and request or response observation
 
-The protocol layer knows about provider wire formats and event shapes. It does not know about the canonical unified model.
+The protocol layer knows about provider wire formats and event shapes. It does not know about the canonical unified model or session semantics.
 
 ## Canonical Unified Layer
 
@@ -40,14 +42,16 @@ Outbound bridges:
 - `BuildMessagesRequest`
 - `BuildCompletionsRequest`
 - `BuildResponsesRequest`
+- `BuildOllamaRequest`
 
 Inbound bridges:
 
 - `MapMessagesEvent`
 - `MapCompletionsEvent`
 - `MapResponsesEvent`
+- `OllamaMapper.MapEvent`
 
-`adapt` should remain translation-focused. It should not own transport execution or provider-specific HTTP behavior.
+`adapt` should remain translation-focused. It should not own transport execution, session state, or service-level conversation policy.
 
 ## Unified Wrapper Layer
 
@@ -58,6 +62,7 @@ Examples:
 - `client.MessagesClient`
 - `client.CompletionsClient`
 - `client.ResponsesClient`
+- `client.OllamaClient`
 - `client.MuxClient`
 
 These wrappers:
@@ -70,6 +75,37 @@ These wrappers:
 6. apply unified event transforms
 
 `client.MuxClient` adds runtime backend selection on top of the same flow.
+
+## Conversation Layer
+
+`conversation` owns stateful conversation semantics above the unified streaming clients.
+
+It is responsible for:
+
+- session defaults (`model`, tools, system/developer defaults)
+- canonical committed history as `[]unified.Message`
+- exact assistant-part ordering in committed history
+- turn commit / rollback behavior
+- replay vs native continuation strategy selection
+- outbound message projection via `MessageProjector`
+- request inspection helpers via `Session.ProjectMessages(...)` and `Session.BuildRequest(...)`
+
+Important distinction:
+
+- canonical session history is the local source of truth
+- outbound replay messages are a projection derived from that history
+
+This lets the library preserve exact history while still allowing service-specific replay policy.
+
+## Provider/Service Policy Layer
+
+Some quirks are not purely protocol-level. Multiple services may expose a similar API kind but differ in replay expectations or tolerated assistant message shapes.
+
+That policy belongs outside the generic `conversation` package.
+
+Example:
+
+- `api/openrouter/conversation.go` exposes `openrouter.ConversationProjector`, which validates OpenRouter Responses replay constraints early without mutating canonical history.
 
 ## Shared Runtime
 
@@ -85,14 +121,27 @@ It is intentionally internal so the public API stays typed and package-specific.
 
 ## Request Flow
 
+### Unified streaming flow
+
 1. Caller creates `unified.Request`
 2. `client` applies unified request transforms
 3. `adapt` builds a typed protocol request
 4. Typed protocol client applies protocol request transforms and header resolution
-5. Shared runtime sends HTTP request and streams SSE events
+5. Shared runtime sends HTTP request and streams SSE/NDJSON events
 6. Typed protocol parser yields typed protocol events
 7. `adapt` maps those events to canonical `unified.StreamEvent`
 8. `client` applies unified event transforms and emits final stream items
+
+### Stateful conversation flow
+
+1. Caller creates `conversation.Request`
+2. `conversation` normalizes it into pending unified messages
+3. `conversation` resolves replay vs native continuation strategy
+4. `conversation.MessageProjector` derives the outbound message list
+5. `conversation` assembles the final `unified.Request`
+6. a unified `client` streams the request
+7. `conversation` accumulates streamed assistant output into exact canonical history
+8. successful turns are committed; failed/incomplete turns are not committed
 
 ## Why Protocol Hooks Are Typed
 
@@ -108,8 +157,6 @@ Typed hooks make these operations explicit and safe without collapsing the publi
 
 ## Testing Strategy
 
-- Unit tests cover bridges, parsers, typed protocol clients, unified wrappers, and mux logic
+- Unit tests cover bridges, parsers, typed protocol clients, unified wrappers, conversation sessions, projection logic, and mux logic
 - Integration smoke tests live in `integration/`
-- Integration tests are build-tagged and env-gated so `go test ./...` stays deterministic
-
-The first smoke target is OpenRouter via the Responses API because it exercises a real upstream stream using the richest currently supported event model.
+- Integration tests are runtime-gated so `go test ./...` stays deterministic by default

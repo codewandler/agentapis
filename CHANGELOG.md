@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+## v0.4.0 - 2026-04-20
+
+### Added
+
+- add a new public `conversation` package with stateful sessions built on unified streaming clients
+- add `conversation.Request`, request builder helpers, canonical history tracking, reasoning history, and tool-result round-tripping
+- add replay and native `previous_response_id` continuation strategies for conversation sessions
+- add exact canonical assistant-part ordering preservation in committed conversation history
+- add `conversation.MessageProjector`, `DefaultMessageProjector`, `Session.ProjectMessages(...)`, and `Session.BuildRequest(...)`
+- add `api/openrouter.ConversationProjector` for early validation of OpenRouter Responses replay constraints
+- add conversation-focused unit and integration coverage for multi-step tool loops, mixed-content ordering, and failure semantics
+
+### Changed
+
+- add release-facing docs and examples for conversation sessions, projection helpers, and OpenRouter-specific replay policy
+- standardize response identity propagation across unified stream bridges so conversation/native continuation can rely on `StreamRef.ResponseID`
+- make provider-specific conversation replay policy explicit at the service layer instead of burying it in generic session logic
+- update repository documentation to cover the conversation package, replay projection, and OpenRouter-specific replay policy
+
 ## v0.3.2 - 2026-04-20
 
 - make unified output token accounting non-overlapping: output excludes reasoning and total includes both

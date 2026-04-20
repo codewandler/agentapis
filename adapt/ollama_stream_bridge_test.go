@@ -30,6 +30,9 @@ func TestOllamaMapperMapsThinkingTextToolAndDone(t *testing.T) {
 	if err != nil || ignored || ev.Type != unified.StreamEventCompleted || ev.Completed == nil || ev.Completed.StopReason != unified.StopReasonEndTurn || ev.Usage == nil || ev.Usage.Tokens.Total() != 5 {
 		t.Fatalf("done map mismatch: ev=%#v ignored=%v err=%v", ev, ignored, err)
 	}
+	if ev.Lifecycle == nil || ev.Lifecycle.Scope != unified.LifecycleScopeResponse || ev.Lifecycle.Ref.ResponseID == "" {
+		t.Fatalf("expected completed event lifecycle response id, got %#v", ev.Lifecycle)
+	}
 }
 
 func TestOllamaMapperCanEmitStartedForEmptyFirstChunk(t *testing.T) {

@@ -1,13 +1,15 @@
 # agentapis
 
-`agentapis` provides typed streaming clients for multiple model APIs, a canonical unified request and event model, and adapters between the protocol-specific and unified layers.
+`agentapis` provides typed streaming clients for multiple model APIs, a canonical unified request and event model, adapters between protocol-specific and unified layers, and a stateful `conversation` package built on top of the unified client layer.
 
 ## Packages
 
 - `api/messages`, `api/completions`, `api/responses`, `api/ollama`: typed protocol clients, request types, parsers, and typed hooks
-- `adapt`: request and stream bridges between protocol-specific types and canonical unified types
 - `api/unified`: canonical request and stream event model
+- `adapt`: request and stream bridges between protocol-specific types and canonical unified types
 - `client`: unified wrapper clients and a mux for runtime backend selection
+- `conversation`: stateful session abstraction with replay/native continuation strategies, exact canonical history, and configurable outbound message projection
+- `api/openrouter`: OpenRouter-specific helpers, including conversation replay projection policy for OpenRouter Responses quirks
 - `internal/protocolcore`: shared HTTP, retry, and SSE execution runtime
 
 ## Layering
@@ -19,8 +21,9 @@
 5. Parse typed protocol events
 6. Bridge typed events back to `unified.StreamEvent`
 7. Optionally apply unified event transforms
+8. Optionally manage stateful sessions and replay/native continuation with `conversation`
 
-See `docs/architecture.md` for the detailed flow.
+See `docs/architecture.md` for the detailed flow and `docs/conversation.md` for the conversation/session model.
 
 ## Typed Protocol Example
 
@@ -53,7 +56,8 @@ func main() {
 		if item.Err != nil {
 			panic(item.Err)
 		}
-		fmt.Printf("event=%s\n", item.Event.EventType())
+		fmt.Printf("event=%s
+", item.Event.EventType())
 	}
 }
 ```
@@ -94,10 +98,96 @@ func main() {
 		if item.Err != nil {
 			panic(item.Err)
 		}
-		fmt.Printf("type=%s\n", item.Event.Type)
+		fmt.Printf("type=%s
+", item.Event.Type)
 	}
 }
 ```
+
+## Conversation Example
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+
+	responsesapi "github.com/codewandler/agentapis/api/responses"
+	"github.com/codewandler/agentapis/client"
+	"github.com/codewandler/agentapis/conversation"
+)
+
+func main() {
+	protocol := responsesapi.NewClient(responsesapi.WithAPIKey("token"))
+	sess := conversation.New(
+		client.NewResponsesClient(protocol),
+		conversation.WithModel("gpt-4o-mini"),
+		conversation.WithCapabilities(conversation.Capabilities{SupportsResponsesPreviousResponseID: true}),
+	)
+
+	stream, err := sess.Request(context.Background(), conversation.NewRequest().User("Reply with pong.").Build())
+	if err != nil {
+		panic(err)
+	}
+	for item := range stream {
+		if item.Err != nil {
+			panic(item.Err)
+		}
+		if item.Event.ContentDelta != nil {
+			fmt.Print(item.Event.ContentDelta.Data)
+		}
+	}
+}
+```
+
+## Projection and Custom Replay Policy Example
+
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/codewandler/agentapis/api/openrouter"
+	"github.com/codewandler/agentapis/conversation"
+)
+
+func main() {
+	sess := conversation.New(
+		nil,
+		conversation.WithModel("openai/gpt-4o-mini"),
+		conversation.WithMessageProjector(openrouter.ConversationProjector{}),
+	)
+
+	msgs, err := sess.ProjectMessages(conversation.NewRequest().User("hello").Build())
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(len(msgs))
+
+	req, err := sess.BuildRequest(conversation.NewRequest().User("hello").Build())
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(req.Model)
+}
+```
+
+`Session.ProjectMessages(...)` exposes the exact outbound replay message list for the next turn. `Session.BuildRequest(...)` exposes the final unified request after strategy selection and message projection. Custom `conversation.MessageProjector` implementations can validate or shape replay messages for service-specific quirks without mutating canonical session history.
+
+## Stability and Release Notes
+
+The `conversation` package and `conversation.MessageProjector` are public release-facing APIs.
+
+Important semantics:
+
+- canonical `Session` history is the local source of truth and preserves assistant-part ordering exactly as observed
+- `Session.ProjectMessages(...)` and `Session.BuildRequest(...)` are inspection helpers and do **not** mutate session state
+- only successful `Session.Request(...)` turns commit history
+- provider/service-specific replay constraints should live outside generic `conversation` when they are vendor-specific, for example in `api/openrouter`
+
+`conversation.MessageProjector` is intended as the supported extension point for service-specific replay projection and validation.
 
 ## Native Ollama Example
 

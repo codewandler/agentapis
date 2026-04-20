@@ -7,11 +7,20 @@ import (
 	"github.com/codewandler/agentapis/api/unified"
 )
 
+type MessagesMapper struct {
+	responseID string
+}
+
+func NewMessagesMapper() *MessagesMapper { return &MessagesMapper{} }
+
 // MapMessagesEvent converts a Messages parser event into a unified stream event.
-func MapMessagesEvent(ev messages.StreamEvent) (unified.StreamEvent, bool, error) {
+func (m *MessagesMapper) MapEvent(ev messages.StreamEvent) (unified.StreamEvent, bool, error) {
 	source := any(ev)
 	switch e := ev.(type) {
 	case *messages.MessageStartEvent:
+		if e.Message.ID != "" {
+			m.responseID = e.Message.ID
+		}
 		return withRawEventPayload(withRawEventName(unified.StreamEvent{
 			Type:    unified.StreamEventStarted,
 			Started: &unified.Started{RequestID: e.Message.ID, Model: e.Message.Model},
@@ -149,7 +158,12 @@ func MapMessagesEvent(ev messages.StreamEvent) (unified.StreamEvent, bool, error
 
 	case *messages.MessageDeltaEvent:
 		return withRawEventPayload(withRawEventName(unified.StreamEvent{
-			Type:      unified.StreamEventCompleted,
+			Type: unified.StreamEventCompleted,
+			Lifecycle: &unified.Lifecycle{
+				Scope: unified.LifecycleScopeResponse,
+				State: unified.LifecycleStateDone,
+				Ref:   unified.StreamRef{ResponseID: m.responseID},
+			},
 			Completed: &unified.Completed{StopReason: mapMessagesStopReason(e.Delta.StopReason)},
 			Usage: usageFromMessagesFields(
 				e.Usage.InputTokens,
@@ -216,4 +230,9 @@ func usageFromMessagesFields(input, cacheWrite, cacheRead, output int) *unified.
 		{Kind: unified.TokenKindOutput, Count: output},
 	}.NonZero()
 	return &unified.StreamUsage{Input: tokens.InputTokens(), Output: tokens.OutputTokens(), Tokens: tokens}
+}
+
+// MapMessagesEvent is a stateless convenience wrapper around MessagesMapper.MapEvent.
+func MapMessagesEvent(ev messages.StreamEvent) (unified.StreamEvent, bool, error) {
+	return NewMessagesMapper().MapEvent(ev)
 }

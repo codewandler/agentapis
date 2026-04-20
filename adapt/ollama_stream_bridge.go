@@ -64,7 +64,7 @@ func (m *OllamaMapper) MapEvent(ev *ollama.Response) (unified.StreamEvent, bool,
 		return withRawEventPayload(withProviderExtras(unified.StreamEvent{Type: unified.StreamEventStarted, Started: &unified.Started{RequestID: ref.ResponseID, Model: ev.Model, Provider: "ollama"}}, ev), source), false, nil
 	}
 	if ev.Done {
-		out := unified.StreamEvent{Type: unified.StreamEventCompleted, Completed: &unified.Completed{StopReason: mapOllamaDoneReason(ev.DoneReason)}}
+		out := unified.StreamEvent{Type: unified.StreamEventCompleted, Lifecycle: &unified.Lifecycle{Scope: unified.LifecycleScopeResponse, State: unified.LifecycleStateDone, Ref: ref}, Completed: &unified.Completed{StopReason: mapOllamaDoneReason(ev.DoneReason)}}
 		if ev.PromptEvalCount > 0 || ev.EvalCount > 0 {
 			tokens := unified.TokenItems{{Kind: unified.TokenKindInputNew, Count: ev.PromptEvalCount}, {Kind: unified.TokenKindOutput, Count: ev.EvalCount}}.NonZero()
 			out.Usage = &unified.StreamUsage{Provider: "ollama", Model: ev.Model, RequestID: ref.ResponseID, Input: tokens.InputTokens(), Output: tokens.OutputTokens(), Tokens: tokens}
