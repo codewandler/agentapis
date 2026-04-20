@@ -3,7 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
-	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -16,16 +16,23 @@ import (
 )
 
 func main() {
+	modelFlag := flag.String("m", "", "OpenAI model to use (overrides OPENAI_MODEL)")
+	cacheFlag := flag.Bool("cache", true, "Enable top-level prompt caching hint for OpenAI-compatible requests")
+	flag.Parse()
+
 	apiKey := os.Getenv("OPENAI_KEY")
 	if apiKey == "" {
 		log.Fatal("set OPENAI_KEY")
 	}
-	model := os.Getenv("OPENAI_MODEL")
+	model := *modelFlag
+	if model == "" {
+		model = os.Getenv("OPENAI_MODEL")
+	}
 	if model == "" {
 		model = "gpt-4o-mini"
 	}
 
-	protocol := responsesapi.NewClient(responsesapi.WithAPIKey(apiKey))
+protocol := responsesapi.NewClient(responsesapi.WithAPIKey(apiKey))
 	streamer := client.NewResponsesClient(protocol)
 	sess := conversation.New(
 		streamer,
@@ -35,6 +42,11 @@ func main() {
 
 	scanner := bufio.NewScanner(os.Stdin)
 	fmt.Printf("agentrepl using model %s\n", model)
+	if *cacheFlag {
+		fmt.Println("top-level caching: enabled")
+	} else {
+		fmt.Println("top-level caching: disabled")
+	}
 	fmt.Println("type messages and press enter; type /exit to quit")
 
 	for {
@@ -53,76 +65,97 @@ func main() {
 			return
 		}
 
-		stream, err := sess.Request(context.Background(), conversation.NewRequest().User(line).Build())
+		b := conversation.NewRequest().User(line)
+		if *cacheFlag {
+			b.CacheHint(&unified.CacheHint{Enabled: true, TTL: "1h"})
+		}
+		req := b.Build()
+		stream, err := sess.Request(context.Background(), req)
 		if err != nil {
 			log.Printf("request error: %v", err)
 			continue
 		}
 
-		var text strings.Builder
-		for item := range stream {
-			if item.Err != nil {
-				log.Printf("stream error: %v", item.Err)
-				continue
+		var sawText bool
+		var sawReasoning bool
+		for ev := range stream {
+			switch e := ev.(type) {
+			case conversation.TextDeltaEvent:
+				if !sawText {
+					if sawReasoning {
+						fmt.Println()
+					}
+					fmt.Print("assistant: ")
+					sawText = true
+				}
+				fmt.Print(e.Text)
+			case conversation.ReasoningDeltaEvent:
+				if !sawText && !sawReasoning {
+					fmt.Print("thinking: ")
+					sawReasoning = true
+				}
+				fmt.Print(e.Text)
+			case conversation.ToolCallEvent:
+				if sawReasoning || sawText {
+					fmt.Println()
+					sawReasoning = false
+					sawText = false
+				}
+				log.Printf("tool call: %s", e.ToolCall.Name)
+			case conversation.UsageEvent:
+				if sawReasoning || sawText {
+					fmt.Println()
+					sawReasoning = false
+					sawText = false
+				}
+				log.Printf("usage: %s", formatUsage(e.Usage))
+			case conversation.ErrorEvent:
+				if sawReasoning || sawText {
+					fmt.Println()
+					sawReasoning = false
+					sawText = false
+				}
+				log.Printf("stream error: %v", e.Err)
+			case conversation.CompletedEvent:
+				if sawReasoning || sawText {
+					fmt.Println()
+					sawReasoning = false
+					sawText = false
+				}
 			}
-			if captureText(&text, item.Event) {
-				continue
-			}
-			if shouldSkipEvent(item.Event) {
-				continue
-			}
-			printEvent(item.Event)
-		}
-		if text.Len() > 0 {
-			fmt.Printf("assistant: %s\n", text.String())
 		}
 		fmt.Println()
 	}
 }
 
-func captureText(buf *strings.Builder, ev unified.StreamEvent) bool {
-	if ev.Type == unified.StreamEventContentDelta && ev.ContentDelta != nil && ev.ContentDelta.Kind == unified.ContentKindText {
-		buf.WriteString(ev.ContentDelta.Data)
-		return true
+func formatUsage(u unified.StreamUsage) string {
+	parts := []string{fmt.Sprintf("in=%d", u.Input.Total)}
+	var inDetails []string
+	if u.Input.New > 0 {
+		inDetails = append(inDetails, fmt.Sprintf("new=%d", u.Input.New))
 	}
-	if ev.Type == unified.StreamEventContent && ev.StreamContent != nil && ev.StreamContent.Kind == unified.ContentKindText {
-		if buf.Len() == 0 {
-			buf.WriteString(ev.StreamContent.Data)
-		}
-		return true
+	if u.Input.CacheRead > 0 {
+		inDetails = append(inDetails, fmt.Sprintf("cache_read=%d", u.Input.CacheRead))
 	}
-	return false
+	if u.Input.CacheWrite > 0 {
+		inDetails = append(inDetails, fmt.Sprintf("cache_write=%d", u.Input.CacheWrite))
+	}
+	if len(inDetails) > 0 {
+		parts[0] += " (" + strings.Join(inDetails, " ") + ")"
+	}
+	out := fmt.Sprintf("out=%d", u.Output.Total)
+	var outDetails []string
+	if u.Output.Reasoning > 0 {
+		outDetails = append(outDetails, fmt.Sprintf("reasoning=%d", u.Output.Reasoning))
+	}
+	if len(outDetails) > 0 {
+		out += " (" + strings.Join(outDetails, " ") + ")"
+	}
+	parts = append(parts, out)
+	if totalCost := u.Costs.Total(); totalCost != 0 {
+		parts = append(parts, fmt.Sprintf("cost=%.6f", totalCost))
+	}
+	return strings.Join(parts, " ")
 }
 
-func shouldSkipEvent(ev unified.StreamEvent) bool {
-	if ev.Type == unified.StreamEventContentDelta && ev.ContentDelta != nil {
-		switch ev.ContentDelta.Kind {
-		case unified.ContentKindText, unified.ContentKindReasoning:
-			return true
-		}
-	}
-	if ev.Type == unified.StreamEventContent && ev.StreamContent != nil {
-		if ev.StreamContent.Kind == unified.ContentKindReasoning {
-			return true
-		}
-	}
-	if ev.Type == unified.StreamEventToolDelta {
-		return true
-	}
-	if ev.Delta != nil {
-		switch ev.Delta.Kind {
-		case unified.DeltaKindText, unified.DeltaKindThinking, unified.DeltaKindTool:
-			return true
-		}
-	}
-	return false
-}
 
-func printEvent(ev unified.StreamEvent) {
-	b, err := json.MarshalIndent(ev, "", "  ")
-	if err != nil {
-		fmt.Printf("%#v\n", ev)
-		return
-	}
-	fmt.Printf("[event]\n%s\n", b)
-}

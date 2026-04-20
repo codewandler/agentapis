@@ -54,11 +54,12 @@ type ProjectionDefaults struct {
 
 // Request is the caller-facing payload for the next conversation step.
 type Request struct {
-	Model        string             `json:"model,omitempty"`
-	Instructions []string           `json:"instructions,omitempty"`
-	Tools        []unified.Tool     `json:"tools,omitempty"`
-	ToolChoice   unified.ToolChoice `json:"tool_choice,omitempty"`
-	Inputs       []Input            `json:"inputs,omitempty"`
+	Model        string               `json:"model,omitempty"`
+	Instructions []string             `json:"instructions,omitempty"`
+	Tools        []unified.Tool       `json:"tools,omitempty"`
+	ToolChoice   unified.ToolChoice   `json:"tool_choice,omitempty"`
+	CacheHint    *unified.CacheHint   `json:"cache_hint,omitempty"`
+	Inputs       []Input              `json:"inputs,omitempty"`
 }
 
 // Input is one request-local conversational input.

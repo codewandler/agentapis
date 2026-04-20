@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## v0.5.0 - 2026-04-20
+
+### Added
+
+- add a compact `conversation.Event` stream surface with concrete event types such as `TextDeltaEvent`, `ReasoningDeltaEvent`, `ToolCallEvent`, `UsageEvent`, `CompletedEvent`, and `ErrorEvent`
+- add `Session.RequestUnified(...)` as the explicit richer unified-event escape hatch alongside the agent-facing `Session.Request(...)`
+- add top-level cache hint support to `conversation.Request` and the request builder via `Builder.CacheHint(...)`
+- add richer REPL behavior with live text and reasoning streaming, usage breakdown display, OpenAI model selection via `-m`, and optional top-level caching
+
+### Changed
+
+- make `Session.Request(...)` the primary smaller agent-facing stream API while reserving `Session.RequestUnified(...)` for rich normalized unified events
+- keep a single `UsageEvent` in the conversation event stream carrying the provider-reported usage item for the current request/response
+- simplify the conversation API surface to `Request(...)` plus `RequestUnified(...)` for streaming entry points
+- update docs and examples to reflect the new conversation event model and REPL behavior
+
 ## v0.4.0 - 2026-04-20
 
 ### Added

@@ -72,7 +72,7 @@ func runUnifiedConversationToolLoopCase(t *testing.T, streamer conversation.Stre
 
 	stream, err := sess.Request(ctx, conversation.NewRequest().User(ollamaToolSmokePrompt).Build())
 	require.NoError(t, err)
-	name, args, raw, completed := collectToolCall(stream, t)
+	name, args, raw, completed := collectConversationToolCall(stream, t)
 	require.True(t, completed)
 	require.Equal(t, ollamaToolName, name)
 	require.Truef(t, toolPayloadContains(raw, args, "berlin"), "expected Berlin in tool payload, raw=%q args=%v", raw, args)
@@ -104,4 +104,23 @@ func firstToolCallID(history []unified.Message) string {
 		}
 	}
 	return ""
+}
+
+func collectConversationToolCall(stream <-chan conversation.Event, t *testing.T) (string, map[string]any, string, bool) {
+	t.Helper()
+	var name, raw string
+	var args map[string]any
+	var completed bool
+	for item := range stream {
+		switch ev := item.(type) {
+		case conversation.ToolCallEvent:
+			name = ev.ToolCall.Name
+			args = ev.ToolCall.Args
+		case conversation.CompletedEvent:
+			completed = true
+		case conversation.ErrorEvent:
+			require.NoError(t, ev.Err)
+		}
+	}
+	return name, args, raw, completed
 }

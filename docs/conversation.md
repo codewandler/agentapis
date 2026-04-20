@@ -57,16 +57,21 @@ Use a custom projector when a service has replay quirks that should be handled e
 
 ## Inspection Helpers
 
-Two helpers are available for debugging, testing, and advanced integration:
+Two helpers are available for debugging, testing, and advanced integration, and one compact streaming API is available for agent-facing consumption:
 
 ```go
 msgs, err := sess.ProjectMessages(req)
 out, err := sess.BuildRequest(req)
+stream, err := sess.Request(ctx, req)
 ```
 
 Use `ProjectMessages(...)` when you want to inspect only the outbound message replay projection.
 
 Use `BuildRequest(...)` when you want the full final `unified.Request` after strategy selection and projection.
+
+Use `Request(...)` when you want the smaller event surface for agent runtimes without consuming the full `unified.StreamEvent` shape directly. `Request(...)` remains a compatibility alias.
+
+Use `RequestUnified(...)` only when you explicitly need the richer lower-level unified event stream.
 
 ## OpenRouter-specific Replay Policy
 

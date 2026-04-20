@@ -97,32 +97,23 @@ func runUnifiedConversationCase(t *testing.T, streamer conversation.Streamer, mo
 	require.Equal(t, unified.RoleUser, history[len(history)-2].Role)
 }
 
-func collectUnifiedConversationText(t *testing.T, stream <-chan client.StreamResult) (string, []string) {
+func collectUnifiedConversationText(t *testing.T, stream <-chan conversation.Event) (string, []string) {
 	t.Helper()
 	var text strings.Builder
-	var fallback strings.Builder
 	var rawEvents []string
 	var sawCompleted bool
 
 	for item := range stream {
-		require.NoErrorf(t, item.Err, "raw events: %v", rawEvents)
-		if item.RawEventName != "" {
-			rawEvents = append(rawEvents, item.RawEventName)
-		}
-		if item.Event.ContentDelta != nil && item.Event.ContentDelta.Kind == unified.ContentKindText {
-			text.WriteString(item.Event.ContentDelta.Data)
-		}
-		if item.Event.StreamContent != nil && item.Event.StreamContent.Kind == unified.ContentKindText {
-			fallback.WriteString(item.Event.StreamContent.Data)
-		}
-		if item.Event.Type == unified.StreamEventCompleted && item.Event.Completed != nil {
+		switch ev := item.(type) {
+		case conversation.TextDeltaEvent:
+			text.WriteString(ev.Text)
+		case conversation.CompletedEvent:
 			sawCompleted = true
+		case conversation.ErrorEvent:
+			require.NoErrorf(t, ev.Err, "raw events: %v", rawEvents)
 		}
 	}
 
 	require.Truef(t, sawCompleted, "expected completed event, raw events: %v", rawEvents)
-	if text.Len() > 0 {
-		return text.String(), rawEvents
-	}
-	return fallback.String(), rawEvents
+	return text.String(), rawEvents
 }

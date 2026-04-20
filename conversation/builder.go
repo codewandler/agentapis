@@ -13,6 +13,15 @@ func (b *Builder) Model(model string) *Builder { b.req.Model = model; return b }
 func (b *Builder) Instructions(lines ...string) *Builder { b.req.Instructions = append(b.req.Instructions, lines...); return b }
 func (b *Builder) Tools(tools []unified.Tool) *Builder { b.req.Tools = append([]unified.Tool(nil), tools...); return b }
 func (b *Builder) ToolChoice(choice unified.ToolChoice) *Builder { b.req.ToolChoice = choice; return b }
+func (b *Builder) CacheHint(h *unified.CacheHint) *Builder {
+	if h == nil {
+		b.req.CacheHint = nil
+		return b
+	}
+	cpy := *h
+	b.req.CacheHint = &cpy
+	return b
+}
 func (b *Builder) Input(in Input) *Builder { b.req.Inputs = append(b.req.Inputs, in); return b }
 func (b *Builder) User(text string) *Builder { b.req.Inputs = append(b.req.Inputs, Input{Role: unified.RoleUser, Text: text}); return b }
 func (b *Builder) Developer(text string) *Builder { b.req.Inputs = append(b.req.Inputs, Input{Role: unified.RoleDeveloper, Text: text}); return b }

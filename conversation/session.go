@@ -32,8 +32,9 @@ func New(streamer Streamer, opts ...Option) *Session {
 	}
 }
 
-// Request advances the conversation by one logical request and streams unified events.
-func (s *Session) Request(ctx context.Context, req Request) (<-chan client.StreamResult, error) {
+// RequestUnified advances the conversation by one logical request and streams the richer unified event surface.
+// Most agent-facing callers should prefer Request, which emits a smaller conversation.Event stream.
+func (s *Session) RequestUnified(ctx context.Context, req Request) (<-chan client.StreamResult, error) {
 	plan, err := s.beginTurn(req)
 	if err != nil {
 		return nil, err
@@ -48,6 +49,11 @@ func (s *Session) Request(ctx context.Context, req Request) (<-chan client.Strea
 	out := make(chan client.StreamResult, 16)
 	go s.forwardTurn(upstream, out, plan)
 	return out, nil
+}
+
+// Request advances the conversation by one logical request and emits the smaller, agent-facing conversation event stream.
+func (s *Session) Request(ctx context.Context, req Request) (<-chan Event, error) {
+	return s.eventStream(ctx, req)
 }
 
 // History returns a safe copy of the committed conversation history.
@@ -173,6 +179,10 @@ func (s *Session) buildProjectionContextLocked(req Request) (projectionContext, 
 		return projectionContext{}, err
 	}
 	out := unified.Request{Model: effectiveModel, Tools: tools, ToolChoice: toolChoice, Messages: cloneMessages(msgs)}
+	if req.CacheHint != nil {
+		h := *req.CacheHint
+		out.CacheHint = &h
+	}
 	if strategy == StrategyResponsesPreviousResponseID {
 		ensureResponsesExtras(&out).PreviousResponseID = s.native.lastResponseID
 	}

@@ -106,6 +106,9 @@ func main() {
 
 ## Conversation Example
 
+`Session.Request(...)` is the primary agent-facing API and returns concrete `conversation.Event` values. Use `Session.RequestUnified(...)` only when you need the richer underlying unified event stream.
+
+
 ```go
 package main
 
@@ -174,7 +177,7 @@ func main() {
 }
 ```
 
-`Session.ProjectMessages(...)` exposes the exact outbound replay message list for the next turn. `Session.BuildRequest(...)` exposes the final unified request after strategy selection and message projection. Custom `conversation.MessageProjector` implementations can validate or shape replay messages for service-specific quirks without mutating canonical session history.
+`Session.ProjectMessages(...)` exposes the exact outbound replay message list for the next turn. `Session.BuildRequest(...)` exposes the final unified request after strategy selection and message projection. `Session.Request(...)` exposes the smaller agent-facing event stream with concrete event types such as `TextDeltaEvent`, `ToolCallEvent`, `UsageEvent`, and `CompletedEvent`. `Session.RequestUnified(...)` remains available as the richer lower-level escape hatch. Custom `conversation.MessageProjector` implementations can validate or shape replay messages for service-specific quirks without mutating canonical session history.
 
 ## Stability and Release Notes
 
