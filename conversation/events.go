@@ -52,12 +52,24 @@ type ErrorEvent struct {
 	Err error `json:"-"`
 }
 
+// RateLimitEvent carries rate limit information from the API response.
+// This event is only emitted when WithRateLimitEvents() is enabled.
+type RateLimitEvent struct {
+	EventMeta
+	RequestLimit     int    `json:"request_limit,omitempty"`
+	RequestRemaining int    `json:"request_remaining,omitempty"`
+	TokenLimit       int    `json:"token_limit,omitempty"`
+	TokenRemaining   int    `json:"token_remaining,omitempty"`
+	RequestID        string `json:"request_id,omitempty"`
+}
+
 func (TextDeltaEvent) event()      {}
 func (ReasoningDeltaEvent) event() {}
 func (ToolCallEvent) event()       {}
 func (UsageEvent) event()          {}
 func (CompletedEvent) event()      {}
 func (ErrorEvent) event()          {}
+func (RateLimitEvent) event()      {}
 
 func (s *Session) eventStream(ctx context.Context, req Request) (<-chan Event, error) {
 	stream, err := s.RequestUnified(ctx, req)
@@ -173,10 +185,7 @@ func eventResponseID(ev unified.StreamEvent) string {
 	return ""
 }
 
-
-type streamItem struct { client.StreamResult }
+type streamItem struct{ client.StreamResult }
 
 func (s streamItem) StreamEvent() unified.StreamEvent { return s.Event }
-func (s streamItem) StreamErr() error               { return s.Err }
-
-
+func (s streamItem) StreamErr() error                 { return s.Err }

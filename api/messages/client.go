@@ -178,18 +178,8 @@ func (c *Client) StreamWithOptions(ctx context.Context, req Request, opts CallOp
 	return out, nil
 }
 func parseAnthropicError(statusCode int, body []byte) error {
-	var resp struct {
-		Type  string `json:"type"`
-		Error struct {
-			Type    string `json:"type"`
-			Message string `json:"message"`
-		} `json:"error"`
+	if apiErr := ParseAPIError(statusCode, body); apiErr != nil {
+		return apiErr
 	}
-	if err := json.Unmarshal(body, &resp); err != nil || resp.Error.Message == "" {
-		return &protocolcore.HTTPError{StatusCode: statusCode, Body: body}
-	}
-	if resp.Error.Type != "" {
-		return fmt.Errorf("%s: %s (HTTP %d)", resp.Error.Type, resp.Error.Message, statusCode)
-	}
-	return fmt.Errorf("%s (HTTP %d)", resp.Error.Message, statusCode)
+	return &protocolcore.HTTPError{StatusCode: statusCode, Body: body}
 }

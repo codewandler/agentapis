@@ -6,23 +6,26 @@ import "github.com/codewandler/agentapis/api/unified"
 type Option func(*config)
 
 type config struct {
-	model       string
-	maxTokens   int
-	temperature float64
-	effort      unified.Effort
-	thinking    unified.ThinkingMode
-	cacheHint   *unified.CacheHint
-	cachePolicy CachePolicy
-	tools       []unified.Tool
-	toolChoice  unified.ToolChoice
-	system      []string
-	developer   []string
-	strategy    Strategy
-	caps        Capabilities
-	projector   MessageProjector
+	model          string
+	maxTokens      int
+	temperature    float64
+	effort         unified.Effort
+	thinking       unified.ThinkingMode
+	cacheHint      *unified.CacheHint
+	cachePolicy    CachePolicy
+	tools          []unified.Tool
+	toolChoice     unified.ToolChoice
+	system         []string
+	developer      []string
+	strategy       Strategy
+	caps           Capabilities
+	projector      MessageProjector
+	emitRateLimits bool
 }
 
-func defaultConfig() config { return config{strategy: StrategyAuto, projector: DefaultMessageProjector{}} }
+func defaultConfig() config {
+	return config{strategy: StrategyAuto, projector: DefaultMessageProjector{}}
+}
 
 func applyOptions(opts []Option) config {
 	cfg := defaultConfig()
@@ -34,19 +37,45 @@ func applyOptions(opts []Option) config {
 	return cfg
 }
 
-func WithModel(model string) Option { return func(c *config) { c.model = model } }
-func WithMaxTokens(max int) Option { return func(c *config) { c.maxTokens = max } }
-func WithTemperature(v float64) Option { return func(c *config) { c.temperature = v } }
-func WithEffort(v unified.Effort) Option { return func(c *config) { c.effort = v } }
+func WithModel(model string) Option              { return func(c *config) { c.model = model } }
+func WithMaxTokens(max int) Option               { return func(c *config) { c.maxTokens = max } }
+func WithTemperature(v float64) Option           { return func(c *config) { c.temperature = v } }
+func WithEffort(v unified.Effort) Option         { return func(c *config) { c.effort = v } }
 func WithThinking(v unified.ThinkingMode) Option { return func(c *config) { c.thinking = v } }
-func WithCacheHint(h *unified.CacheHint) Option { return func(c *config) { if h == nil { c.cacheHint = nil; return }; cp := *h; c.cacheHint = &cp } }
+func WithCacheHint(h *unified.CacheHint) Option {
+	return func(c *config) {
+		if h == nil {
+			c.cacheHint = nil
+			return
+		}
+		cp := *h
+		c.cacheHint = &cp
+	}
+}
 func WithCachePolicy(p CachePolicy) Option { return func(c *config) { c.cachePolicy = p } }
-func WithTools(tools []unified.Tool) Option { return func(c *config) { c.tools = append([]unified.Tool(nil), tools...) } }
-func WithToolChoice(choice unified.ToolChoice) Option { return func(c *config) { c.toolChoice = choice } }
-func WithSystem(lines ...string) Option { return func(c *config) { c.system = append([]string(nil), lines...) } }
-func WithDeveloper(lines ...string) Option { return func(c *config) { c.developer = append([]string(nil), lines...) } }
-func WithStrategy(strategy Strategy) Option { return func(c *config) { c.strategy = strategy } }
+func WithTools(tools []unified.Tool) Option {
+	return func(c *config) { c.tools = append([]unified.Tool(nil), tools...) }
+}
+func WithToolChoice(choice unified.ToolChoice) Option {
+	return func(c *config) { c.toolChoice = choice }
+}
+func WithSystem(lines ...string) Option {
+	return func(c *config) { c.system = append([]string(nil), lines...) }
+}
+func WithDeveloper(lines ...string) Option {
+	return func(c *config) { c.developer = append([]string(nil), lines...) }
+}
+func WithStrategy(strategy Strategy) Option     { return func(c *config) { c.strategy = strategy } }
 func WithCapabilities(caps Capabilities) Option { return func(c *config) { c.caps = caps } }
 
 // WithMessageProjector configures how canonical session state is projected into outbound messages for the next turn.
-func WithMessageProjector(projector MessageProjector) Option { return func(c *config) { c.projector = projector } }
+func WithMessageProjector(projector MessageProjector) Option {
+	return func(c *config) { c.projector = projector }
+}
+
+// WithRateLimitEvents enables emitting RateLimitEvent in the conversation event stream.
+// When enabled and the underlying streamer provides rate limit information, rate limit
+// events will be included in the event stream.
+func WithRateLimitEvents() Option {
+	return func(c *config) { c.emitRateLimits = true }
+}

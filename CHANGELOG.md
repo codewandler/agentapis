@@ -1,6 +1,21 @@
 # Changelog
 
-## Unreleased
+## v0.8.0 - 2026-04-20
+
+### Added
+
+- add structured API error types in `api/messages` with `APIError`, error type constants, and sentinel errors
+- add `AsAPIError` helper for unwrapping API errors with type-safe checking
+- add rate limit parsing from response headers via `ParseRateLimits`
+- add `RateLimits` struct with request/token limits and reset times
+- add auto system cache control transform with configurable TTL via `AutoSystemCacheControlWithTTL`
+- add `WithRateLimitCallback` session option for observing rate limits per response
+- add `SignatureEvent` to conversation events for thinking signature verification
+
+### Fixed
+
+- fix thinking signature tracking in `turnAccumulator` to use wire indices instead of filtered indices
+- fix signature verification for interleaved thinking blocks in multi-part responses
 
 ## v0.7.1 - 2026-04-20
 

@@ -18,6 +18,8 @@ import (
 func main() {
 	modelFlag := flag.String("m", "", "OpenAI model to use (overrides OPENAI_MODEL)")
 	cacheFlag := flag.Bool("cache", true, "Enable top-level prompt caching hint for OpenAI-compatible requests")
+	effortFlag := flag.String("effort", "medium", "Reasoning effort: low, medium, high")
+	thinkingFlag := flag.String("thinking", "on", "Thinking mode: on, off, auto")
 	flag.Parse()
 
 	apiKey := os.Getenv("OPENAI_KEY")
@@ -34,11 +36,17 @@ func main() {
 
 protocol := responsesapi.NewClient(responsesapi.WithAPIKey(apiKey))
 	streamer := client.NewResponsesClient(protocol)
-	sess := conversation.New(
-		streamer,
+	sessOpts := []conversation.Option{
 		conversation.WithModel(model),
 		conversation.WithCapabilities(conversation.Capabilities{SupportsResponsesPreviousResponseID: true}),
-	)
+	}
+	if effort, ok := parseEffort(*effortFlag); ok {
+		sessOpts = append(sessOpts, conversation.WithEffort(effort))
+	}
+	if thinking, ok := parseThinking(*thinkingFlag); ok {
+		sessOpts = append(sessOpts, conversation.WithThinking(thinking))
+	}
+	sess := conversation.New(streamer, sessOpts...)
 
 	scanner := bufio.NewScanner(os.Stdin)
 	fmt.Printf("agentrepl using model %s\n", model)
@@ -159,3 +167,36 @@ func formatUsage(u unified.StreamUsage) string {
 }
 
 
+
+
+func parseEffort(v string) (unified.Effort, bool) {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "":
+		return "", false
+	case "low":
+		return unified.EffortLow, true
+	case "medium":
+		return unified.EffortMedium, true
+	case "high":
+		return unified.EffortHigh, true
+	default:
+		log.Printf("unknown effort %q, ignoring", v)
+		return "", false
+	}
+}
+
+func parseThinking(v string) (unified.ThinkingMode, bool) {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "":
+		return "", false
+	case "on":
+		return unified.ThinkingModeOn, true
+	case "off":
+		return unified.ThinkingModeOff, true
+	case "auto":
+		return unified.ThinkingModeAuto, true
+	default:
+		log.Printf("unknown thinking mode %q, ignoring", v)
+		return "", false
+	}
+}

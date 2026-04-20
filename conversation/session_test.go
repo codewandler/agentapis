@@ -352,7 +352,6 @@ func TestSessionRequestNormalizesInstructionsToolResultsAndUserInputsInOrder(t *
 	}
 }
 
-
 func mixedAssistantTurn(responseID string) []client.StreamResult {
 	return []client.StreamResult{
 		{Event: unified.StreamEvent{Type: unified.StreamEventContentDelta, ContentDelta: &unified.ContentDelta{ContentBase: unified.ContentBase{Ref: unified.StreamRef{ResponseID: responseID}, Kind: unified.ContentKindReasoning, Variant: unified.ContentVariantRaw, Encoding: unified.ContentEncodingUTF8, Data: "reason-1 "}}}},
@@ -487,7 +486,6 @@ func TestSessionNativeStrategyToolLoopUsesLatestPreviousResponseID(t *testing.T)
 		t.Fatalf("expected full local history retained in native mode, got %#v", h)
 	}
 }
-
 
 func incompleteMixedAssistantTurn(responseID string) []client.StreamResult {
 	return []client.StreamResult{
@@ -644,7 +642,6 @@ func TestSessionNativeMixedContentFailedFollowupDoesNotAdvancePreviousResponseID
 	}
 }
 
-
 type captureProjector struct {
 	seen []MessageProjectionState
 	out  []unified.Message
@@ -726,9 +723,6 @@ func TestSessionRequestUnifiedUsesBuildRequestPath(t *testing.T) {
 	}
 }
 
-
-
-
 func TestSessionBuildRequestWithCustomRejectingProjectorFailsEarlyOnUnsupportedReplayShape(t *testing.T) {
 	t.Parallel()
 	proj := &captureProjector{err: errors.New("custom projector rejected replay shape")}
@@ -738,7 +732,6 @@ func TestSessionBuildRequestWithCustomRejectingProjectorFailsEarlyOnUnsupportedR
 		t.Fatalf("expected custom projector error, got %v", err)
 	}
 }
-
 
 func completedUsage(responseID string) []client.StreamResult {
 	return []client.StreamResult{{Event: unified.StreamEvent{Type: unified.StreamEventUsage, Usage: &unified.StreamUsage{RequestID: responseID, Input: unified.InputTokens{Total: 3, New: 3}, Output: unified.OutputTokens{Total: 2}, Tokens: unified.TokenItems{{Kind: unified.TokenKindInputNew, Count: 3}, {Kind: unified.TokenKindOutput, Count: 2}}}}}}
@@ -986,5 +979,196 @@ func TestSessionBuildRequestExplicitCacheHintWinsOverPolicyOff(t *testing.T) {
 	}
 	if req.CacheHint == nil || req.CacheHint.TTL != "5m" {
 		t.Fatalf("expected explicit request cache hint to win over policy off, got %#v", req.CacheHint)
+	}
+}
+
+// completedReasoningWithSignature creates stream events for reasoning with wire index and signature.
+func completedReasoningWithSignature(responseID string, wireIndex int, text, signature string) []client.StreamResult {
+	idx := uint32(wireIndex)
+	out := []client.StreamResult{
+		{Event: unified.StreamEvent{
+			Type: unified.StreamEventContentDelta,
+			ContentDelta: &unified.ContentDelta{
+				ContentBase: unified.ContentBase{
+					Ref:      unified.StreamRef{ResponseID: responseID, ItemIndex: &idx},
+					Kind:     unified.ContentKindReasoning,
+					Variant:  unified.ContentVariantRaw,
+					Encoding: unified.ContentEncodingUTF8,
+					Data:     text,
+				},
+			},
+		}},
+	}
+	// content_block_stop event with signature
+	out = append(out, client.StreamResult{Event: unified.StreamEvent{
+		Type: unified.StreamEventContent,
+		StreamContent: &unified.StreamContent{
+			ContentBase: unified.ContentBase{
+				Ref:       unified.StreamRef{ResponseID: responseID, ItemIndex: &idx},
+				Kind:      unified.ContentKindReasoning,
+				Variant:   unified.ContentVariantRaw,
+				Signature: signature,
+			},
+		},
+	}})
+	return out
+}
+
+// completedTextWithWireIndex creates a text delta with wire index.
+func completedTextWithWireIndex(responseID string, wireIndex int, text string) client.StreamResult {
+	idx := uint32(wireIndex)
+	return client.StreamResult{Event: unified.StreamEvent{
+		Type: unified.StreamEventContentDelta,
+		ContentDelta: &unified.ContentDelta{
+			ContentBase: unified.ContentBase{
+				Ref:      unified.StreamRef{ResponseID: responseID, ItemIndex: &idx},
+				Kind:     unified.ContentKindText,
+				Variant:  unified.ContentVariantPrimary,
+				Encoding: unified.ContentEncodingUTF8,
+				Data:     text,
+			},
+		},
+	}}
+}
+
+func TestSessionCapturesThinkingSignatureFromContentBlockStop(t *testing.T) {
+	t.Parallel()
+	// Simulate: thinking block at wire index 0 with signature, then text at wire index 1
+	stream := []client.StreamResult{}
+	stream = append(stream, completedReasoningWithSignature("resp_sig", 0, "deep thoughts", "sig_abc123")...)
+	stream = append(stream, completedTextWithWireIndex("resp_sig", 1, "final answer"))
+	stream = append(stream, client.StreamResult{Event: unified.StreamEvent{
+		Type:      unified.StreamEventCompleted,
+		Lifecycle: &unified.Lifecycle{Scope: unified.LifecycleScopeResponse, State: unified.LifecycleStateDone, Ref: unified.StreamRef{ResponseID: "resp_sig"}},
+		Completed: &unified.Completed{StopReason: unified.StopReasonEndTurn},
+	}})
+
+	fs := &fakeStreamer{streams: [][]client.StreamResult{stream}}
+	s := New(fs, WithModel("gpt-4o-mini"))
+	ch, err := s.RequestUnified(context.Background(), Request{Inputs: []Input{{Role: unified.RoleUser, Text: "think"}}})
+	if err != nil {
+		t.Fatalf("Request() error = %v", err)
+	}
+	drain(ch)
+
+	h := s.History()
+	if len(h) != 2 {
+		t.Fatalf("expected 2 history messages, got %d", len(h))
+	}
+	assistant := h[1]
+	if len(assistant.Parts) < 2 {
+		t.Fatalf("expected at least 2 parts, got %d: %#v", len(assistant.Parts), assistant.Parts)
+	}
+	// First part should be thinking with signature
+	thinkingPart := assistant.Parts[0]
+	if thinkingPart.Type != unified.PartTypeThinking {
+		t.Fatalf("expected first part to be thinking, got %v", thinkingPart.Type)
+	}
+	if thinkingPart.Thinking == nil {
+		t.Fatalf("expected thinking part to have thinking data")
+	}
+	if thinkingPart.Thinking.Text != "deep thoughts" {
+		t.Fatalf("expected thinking text 'deep thoughts', got %q", thinkingPart.Thinking.Text)
+	}
+	if thinkingPart.Thinking.Signature != "sig_abc123" {
+		t.Fatalf("expected thinking signature 'sig_abc123', got %q", thinkingPart.Thinking.Signature)
+	}
+	// Second part should be text
+	textPart := assistant.Parts[1]
+	if textPart.Type != unified.PartTypeText {
+		t.Fatalf("expected second part to be text, got %v", textPart.Type)
+	}
+	if textPart.Text != "final answer" {
+		t.Fatalf("expected text 'final answer', got %q", textPart.Text)
+	}
+}
+
+func TestSessionCapturesMultipleThinkingBlocksWithSignatures(t *testing.T) {
+	t.Parallel()
+	// Simulate: two thinking blocks at different wire indices, each with a signature
+	stream := []client.StreamResult{}
+	stream = append(stream, completedReasoningWithSignature("resp_multi", 0, "thought one", "sig_1")...)
+	stream = append(stream, completedReasoningWithSignature("resp_multi", 2, "thought two", "sig_2")...)
+	stream = append(stream, completedTextWithWireIndex("resp_multi", 3, "done"))
+	stream = append(stream, client.StreamResult{Event: unified.StreamEvent{
+		Type:      unified.StreamEventCompleted,
+		Lifecycle: &unified.Lifecycle{Scope: unified.LifecycleScopeResponse, State: unified.LifecycleStateDone, Ref: unified.StreamRef{ResponseID: "resp_multi"}},
+		Completed: &unified.Completed{StopReason: unified.StopReasonEndTurn},
+	}})
+
+	fs := &fakeStreamer{streams: [][]client.StreamResult{stream}}
+	s := New(fs, WithModel("gpt-4o-mini"))
+	ch, err := s.RequestUnified(context.Background(), Request{Inputs: []Input{{Role: unified.RoleUser, Text: "think"}}})
+	if err != nil {
+		t.Fatalf("Request() error = %v", err)
+	}
+	drain(ch)
+
+	h := s.History()
+	if len(h) != 2 {
+		t.Fatalf("expected 2 history messages, got %d", len(h))
+	}
+	assistant := h[1]
+	if len(assistant.Parts) != 3 {
+		t.Fatalf("expected 3 parts (2 thinking + 1 text), got %d: %#v", len(assistant.Parts), assistant.Parts)
+	}
+
+	// First thinking part
+	if assistant.Parts[0].Type != unified.PartTypeThinking || assistant.Parts[0].Thinking == nil {
+		t.Fatalf("expected first part to be thinking, got %v", assistant.Parts[0])
+	}
+	if assistant.Parts[0].Thinking.Text != "thought one" || assistant.Parts[0].Thinking.Signature != "sig_1" {
+		t.Fatalf("unexpected first thinking part: %#v", assistant.Parts[0].Thinking)
+	}
+
+	// Second thinking part
+	if assistant.Parts[1].Type != unified.PartTypeThinking || assistant.Parts[1].Thinking == nil {
+		t.Fatalf("expected second part to be thinking, got %v", assistant.Parts[1])
+	}
+	if assistant.Parts[1].Thinking.Text != "thought two" || assistant.Parts[1].Thinking.Signature != "sig_2" {
+		t.Fatalf("unexpected second thinking part: %#v", assistant.Parts[1].Thinking)
+	}
+
+	// Text part
+	if assistant.Parts[2].Type != unified.PartTypeText || assistant.Parts[2].Text != "done" {
+		t.Fatalf("expected third part to be text 'done', got %v", assistant.Parts[2])
+	}
+}
+
+func TestSessionThinkingBlocksPreserveEmissionOrderWithSignatures(t *testing.T) {
+	t.Parallel()
+	// Simulate: thinking blocks arriving in emission order (wire index 2 before 0 - unusual but valid)
+	// Parts are ordered by emission, not wire index - signatures are matched by text content
+	stream := []client.StreamResult{}
+	// Wire index 2 arrives first
+	stream = append(stream, completedReasoningWithSignature("resp_order", 2, "second thought", "sig_b")...)
+	// Wire index 0 arrives second
+	stream = append(stream, completedReasoningWithSignature("resp_order", 0, "first thought", "sig_a")...)
+	stream = append(stream, client.StreamResult{Event: unified.StreamEvent{
+		Type:      unified.StreamEventCompleted,
+		Lifecycle: &unified.Lifecycle{Scope: unified.LifecycleScopeResponse, State: unified.LifecycleStateDone, Ref: unified.StreamRef{ResponseID: "resp_order"}},
+		Completed: &unified.Completed{StopReason: unified.StopReasonEndTurn},
+	}})
+
+	fs := &fakeStreamer{streams: [][]client.StreamResult{stream}}
+	s := New(fs, WithModel("gpt-4o-mini"))
+	ch, err := s.RequestUnified(context.Background(), Request{Inputs: []Input{{Role: unified.RoleUser, Text: "think"}}})
+	if err != nil {
+		t.Fatalf("Request() error = %v", err)
+	}
+	drain(ch)
+
+	h := s.History()
+	assistant := h[1]
+	if len(assistant.Parts) != 2 {
+		t.Fatalf("expected 2 thinking parts, got %d: %#v", len(assistant.Parts), assistant.Parts)
+	}
+
+	// Parts are in emission order (not wire index order), but signatures are correctly associated
+	if assistant.Parts[0].Thinking.Text != "second thought" || assistant.Parts[0].Thinking.Signature != "sig_b" {
+		t.Fatalf("expected first part to be 'second thought' with sig_b (emission order), got %#v", assistant.Parts[0].Thinking)
+	}
+	if assistant.Parts[1].Thinking.Text != "first thought" || assistant.Parts[1].Thinking.Signature != "sig_a" {
+		t.Fatalf("expected second part to be 'first thought' with sig_a, got %#v", assistant.Parts[1].Thinking)
 	}
 }

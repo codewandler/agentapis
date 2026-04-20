@@ -3,6 +3,7 @@ package conversation
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/codewandler/agentapis/api/unified"
 	"github.com/codewandler/agentapis/client"
@@ -25,7 +26,13 @@ func New(streamer Streamer, opts ...Option) *Session {
 			temperature: cfg.temperature,
 			effort:      cfg.effort,
 			thinking:    cfg.thinking,
-			cacheHint:   func() *unified.CacheHint { if cfg.cacheHint == nil { return nil }; cp := *cfg.cacheHint; return &cp }(),
+			cacheHint: func() *unified.CacheHint {
+				if cfg.cacheHint == nil {
+					return nil
+				}
+				cp := *cfg.cacheHint
+				return &cp
+			}(),
 			cachePolicy: cfg.cachePolicy,
 			tools:       append([]unified.Tool(nil), cfg.tools...),
 			toolChoice:  cfg.toolChoice,
@@ -108,7 +115,6 @@ func (s *Session) BuildRequest(req Request) (unified.Request, error) {
 	}
 	return ctx.request, nil
 }
-
 
 func (s *Session) beginTurn(req Request) (turnPlan, error) {
 	s.mu.Lock()
@@ -309,6 +315,20 @@ type turnAccumulator struct {
 	fallbackRaw       string
 	fallbackSummary   string
 	reasoning         ReasoningRecord
+
+	// Wire index tracking for thinking signatures
+	thinkingByWireIndex map[int]*thinkingBlockAccum
+
+	// Track the last wire index used for thinking to avoid merging separate blocks
+	lastThinkingWireIndex int
+}
+
+// thinkingBlockAccum accumulates a single thinking block by wire index.
+type thinkingBlockAccum struct {
+	wireIndex int
+	variant   unified.ContentVariant
+	text      strings.Builder
+	signature string
 }
 
 func (a *turnAccumulator) ingest(ev unified.StreamEvent) {
@@ -336,27 +356,56 @@ func (a *turnAccumulator) ingest(ev unified.StreamEvent) {
 }
 
 func (a *turnAccumulator) ingestDelta(delta unified.ContentDelta) {
-	if delta.Data == "" {
-		return
+	wireIndex := -1
+	if delta.Ref.ItemIndex != nil {
+		wireIndex = int(*delta.Ref.ItemIndex)
 	}
+
 	switch delta.Kind {
 	case unified.ContentKindText:
-		a.textDeltaSeen = true
-		a.appendText(delta.Data)
+		if delta.Data != "" {
+			a.textDeltaSeen = true
+			a.appendText(delta.Data)
+		}
 	case unified.ContentKindReasoning:
-		if delta.Variant == unified.ContentVariantSummary {
-			a.reasoningDeltaSum = true
-			a.reasoning.Summary += delta.Data
-			a.appendThinking("conversation.reasoning.summary", delta.Data)
-		} else {
-			a.reasoningDeltaRaw = true
-			a.reasoning.Raw += delta.Data
-			a.appendThinking("conversation.reasoning.raw", delta.Data)
+		if delta.Data != "" {
+			if delta.Variant == unified.ContentVariantSummary {
+				a.reasoningDeltaSum = true
+				a.reasoning.Summary += delta.Data
+			} else {
+				a.reasoningDeltaRaw = true
+				a.reasoning.Raw += delta.Data
+			}
+			// Append thinking to parts (preserves emission order, separates by wire index)
+			provider := "conversation.reasoning.raw"
+			if delta.Variant == unified.ContentVariantSummary {
+				provider = "conversation.reasoning.summary"
+			}
+			a.appendThinkingWithIndex(provider, delta.Data, wireIndex)
+
+			// Also track by wire index for signature association
+			if wireIndex >= 0 {
+				a.appendThinkingForWireIndex(wireIndex, delta.Variant, delta.Data)
+			}
+		}
+		// Capture signature from delta (signature_delta events)
+		if delta.Signature != "" && wireIndex >= 0 {
+			a.setSignatureForWireIndex(wireIndex, delta.Signature)
 		}
 	}
 }
 
 func (a *turnAccumulator) ingestContent(content unified.StreamContent) {
+	wireIndex := -1
+	if content.Ref.ItemIndex != nil {
+		wireIndex = int(*content.Ref.ItemIndex)
+	}
+
+	// Capture signature from complete content event (content_block_stop)
+	if content.Signature != "" && wireIndex >= 0 && content.Kind == unified.ContentKindReasoning {
+		a.setSignatureForWireIndex(wireIndex, content.Signature)
+	}
+
 	if content.Data == "" {
 		return
 	}
@@ -390,19 +439,88 @@ func (a *turnAccumulator) appendText(text string) {
 }
 
 func (a *turnAccumulator) appendThinking(provider, text string) {
+	a.appendThinkingWithIndex(provider, text, -1)
+}
+
+func (a *turnAccumulator) appendThinkingWithIndex(provider, text string, wireIndex int) {
 	if text == "" {
 		return
 	}
+	// Only merge if same provider AND same wire index (or no wire index tracking)
+	canMerge := false
 	if n := len(a.parts); n > 0 && a.parts[n-1].Type == unified.PartTypeThinking && a.parts[n-1].Thinking != nil && a.parts[n-1].Thinking.Provider == provider {
-		a.parts[n-1].Thinking.Text += text
-		return
+		if wireIndex < 0 || wireIndex == a.lastThinkingWireIndex {
+			canMerge = true
+		}
 	}
-	a.parts = append(a.parts, unified.Part{Type: unified.PartTypeThinking, Thinking: &unified.ThinkingPart{Provider: provider, Text: text}})
+	if canMerge {
+		a.parts[len(a.parts)-1].Thinking.Text += text
+	} else {
+		a.parts = append(a.parts, unified.Part{Type: unified.PartTypeThinking, Thinking: &unified.ThinkingPart{Provider: provider, Text: text}})
+	}
+	if wireIndex >= 0 {
+		a.lastThinkingWireIndex = wireIndex
+	}
 }
 
 func (a *turnAccumulator) rememberResponseID(id string) {
 	if a.lastResponseID == "" && id != "" {
 		a.lastResponseID = id
+	}
+}
+
+// appendThinkingForWireIndex accumulates thinking text for a specific wire index.
+func (a *turnAccumulator) appendThinkingForWireIndex(wireIndex int, variant unified.ContentVariant, text string) {
+	if a.thinkingByWireIndex == nil {
+		a.thinkingByWireIndex = make(map[int]*thinkingBlockAccum)
+	}
+	acc, ok := a.thinkingByWireIndex[wireIndex]
+	if !ok {
+		acc = &thinkingBlockAccum{wireIndex: wireIndex, variant: variant}
+		a.thinkingByWireIndex[wireIndex] = acc
+	}
+	acc.text.WriteString(text)
+}
+
+// setSignatureForWireIndex sets the signature for a thinking block at the given wire index.
+func (a *turnAccumulator) setSignatureForWireIndex(wireIndex int, signature string) {
+	if a.thinkingByWireIndex == nil {
+		a.thinkingByWireIndex = make(map[int]*thinkingBlockAccum)
+	}
+	acc, ok := a.thinkingByWireIndex[wireIndex]
+	if !ok {
+		// Create entry even if we haven't seen content yet (signature may arrive first or alone)
+		acc = &thinkingBlockAccum{wireIndex: wireIndex}
+		a.thinkingByWireIndex[wireIndex] = acc
+	}
+	if signature != "" {
+		acc.signature = signature
+	}
+}
+
+// finalizeThinkingParts applies signatures from wire-indexed tracking to existing thinking parts.
+// Parts maintain their original emission order; signatures are matched by text content.
+func (a *turnAccumulator) finalizeThinkingParts() {
+	if len(a.thinkingByWireIndex) == 0 {
+		return
+	}
+
+	// Build a map from thinking text -> signature for matching
+	textToSignature := make(map[string]string)
+	for _, acc := range a.thinkingByWireIndex {
+		text := acc.text.String()
+		if text != "" && acc.signature != "" {
+			textToSignature[text] = acc.signature
+		}
+	}
+
+	// Apply signatures to existing thinking parts by matching text content
+	for i := range a.parts {
+		if a.parts[i].Type == unified.PartTypeThinking && a.parts[i].Thinking != nil {
+			if sig, ok := textToSignature[a.parts[i].Thinking.Text]; ok {
+				a.parts[i].Thinking.Signature = sig
+			}
+		}
 	}
 }
 
@@ -421,6 +539,10 @@ func (a *turnAccumulator) result() turnResult {
 		a.reasoning.Summary += a.fallbackSummary
 		a.appendThinking("conversation.reasoning.summary", a.fallbackSummary)
 	}
+
+	// Finalize thinking parts with proper wire-index ordering and signatures
+	a.finalizeThinkingParts()
+
 	res := turnResult{lastResponseID: a.lastResponseID, committed: true, reasoning: a.reasoning}
 	if len(a.parts) > 0 {
 		msg := unified.Message{Role: unified.RoleAssistant, Parts: cloneParts(a.parts)}
@@ -535,7 +657,6 @@ func ensureResponsesExtras(req *unified.Request) *unified.ResponsesExtras {
 	}
 	return req.Extras.Responses
 }
-
 
 func resolveCacheSettings(req Request, defaults sessionDefaults) (*unified.CacheHint, CachePolicy) {
 	policy := req.CachePolicy
