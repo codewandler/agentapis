@@ -23,6 +23,8 @@ func New(streamer Streamer, opts ...Option) *Session {
 			model:       cfg.model,
 			maxTokens:   cfg.maxTokens,
 			temperature: cfg.temperature,
+			effort:      cfg.effort,
+			thinking:    cfg.thinking,
 			tools:       append([]unified.Tool(nil), cfg.tools...),
 			toolChoice:  cfg.toolChoice,
 			system:      append([]string(nil), cfg.system...),
@@ -159,6 +161,14 @@ func (s *Session) buildProjectionContextLocked(req Request) (projectionContext, 
 	if effectiveTemperature == 0 {
 		effectiveTemperature = s.defaults.temperature
 	}
+	effectiveEffort := req.Effort
+	if effectiveEffort.IsEmpty() {
+		effectiveEffort = s.defaults.effort
+	}
+	effectiveThinking := req.Thinking
+	if effectiveThinking.IsEmpty() {
+		effectiveThinking = s.defaults.thinking
+	}
 	tools := cloneTools(s.defaults.tools)
 	if len(req.Tools) > 0 {
 		tools = cloneTools(req.Tools)
@@ -188,7 +198,7 @@ func (s *Session) buildProjectionContextLocked(req Request) (projectionContext, 
 	if err != nil {
 		return projectionContext{}, err
 	}
-	out := unified.Request{Model: effectiveModel, MaxTokens: effectiveMaxTokens, Temperature: effectiveTemperature, Tools: tools, ToolChoice: toolChoice, Messages: cloneMessages(msgs)}
+	out := unified.Request{Model: effectiveModel, MaxTokens: effectiveMaxTokens, Temperature: effectiveTemperature, Effort: effectiveEffort, Thinking: effectiveThinking, Tools: tools, ToolChoice: toolChoice, Messages: cloneMessages(msgs)}
 	if req.CacheHint != nil {
 		h := *req.CacheHint
 		out.CacheHint = &h

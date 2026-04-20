@@ -9,6 +9,8 @@ type config struct {
 	model       string
 	maxTokens   int
 	temperature float64
+	effort      unified.Effort
+	thinking    unified.ThinkingMode
 	tools       []unified.Tool
 	toolChoice  unified.ToolChoice
 	system      []string
@@ -33,6 +35,8 @@ func applyOptions(opts []Option) config {
 func WithModel(model string) Option { return func(c *config) { c.model = model } }
 func WithMaxTokens(max int) Option { return func(c *config) { c.maxTokens = max } }
 func WithTemperature(v float64) Option { return func(c *config) { c.temperature = v } }
+func WithEffort(v unified.Effort) Option { return func(c *config) { c.effort = v } }
+func WithThinking(v unified.ThinkingMode) Option { return func(c *config) { c.thinking = v } }
 func WithTools(tools []unified.Tool) Option { return func(c *config) { c.tools = append([]unified.Tool(nil), tools...) } }
 func WithToolChoice(choice unified.ToolChoice) Option { return func(c *config) { c.toolChoice = choice } }
 func WithSystem(lines ...string) Option { return func(c *config) { c.system = append([]string(nil), lines...) } }

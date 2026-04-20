@@ -871,3 +871,39 @@ func TestSessionBuildRequestRequestValuesOverrideDefaultMaxTokensAndTemperature(
 		t.Fatalf("expected request override max_tokens/temperature, got %#v", req)
 	}
 }
+
+func TestSessionBuildRequestCarriesEffortAndThinking(t *testing.T) {
+	t.Parallel()
+	s := New(&fakeStreamer{}, WithModel("gpt-4o-mini"))
+	req, err := s.BuildRequest(Request{Effort: unified.EffortMedium, Thinking: unified.ThinkingModeOn, Inputs: []Input{{Role: unified.RoleUser, Text: "ping"}}})
+	if err != nil {
+		t.Fatalf("BuildRequest() error = %v", err)
+	}
+	if req.Effort != unified.EffortMedium || req.Thinking != unified.ThinkingModeOn {
+		t.Fatalf("expected propagated effort/thinking, got %#v", req)
+	}
+}
+
+func TestSessionBuildRequestUsesDefaultEffortAndThinking(t *testing.T) {
+	t.Parallel()
+	s := New(&fakeStreamer{}, WithModel("gpt-4o-mini"), WithEffort(unified.EffortLow), WithThinking(unified.ThinkingModeOff))
+	req, err := s.BuildRequest(Request{Inputs: []Input{{Role: unified.RoleUser, Text: "ping"}}})
+	if err != nil {
+		t.Fatalf("BuildRequest() error = %v", err)
+	}
+	if req.Effort != unified.EffortLow || req.Thinking != unified.ThinkingModeOff {
+		t.Fatalf("expected default effort/thinking, got %#v", req)
+	}
+}
+
+func TestSessionBuildRequestRequestValuesOverrideDefaultEffortAndThinking(t *testing.T) {
+	t.Parallel()
+	s := New(&fakeStreamer{}, WithModel("gpt-4o-mini"), WithEffort(unified.EffortLow), WithThinking(unified.ThinkingModeOff))
+	req, err := s.BuildRequest(Request{Effort: unified.EffortHigh, Thinking: unified.ThinkingModeOn, Inputs: []Input{{Role: unified.RoleUser, Text: "ping"}}})
+	if err != nil {
+		t.Fatalf("BuildRequest() error = %v", err)
+	}
+	if req.Effort != unified.EffortHigh || req.Thinking != unified.ThinkingModeOn {
+		t.Fatalf("expected request override effort/thinking, got %#v", req)
+	}
+}

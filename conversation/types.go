@@ -57,6 +57,8 @@ type Request struct {
 	Model        string               `json:"model,omitempty"`
 	MaxTokens    int                  `json:"max_tokens,omitempty"`
 	Temperature  float64              `json:"temperature,omitempty"`
+	Effort       unified.Effort       `json:"effort,omitempty"`
+	Thinking     unified.ThinkingMode `json:"thinking,omitempty"`
 	Instructions []string             `json:"instructions,omitempty"`
 	Tools        []unified.Tool       `json:"tools,omitempty"`
 	ToolChoice   unified.ToolChoice   `json:"tool_choice,omitempty"`
@@ -105,6 +107,8 @@ type sessionDefaults struct {
 	model       string
 	maxTokens   int
 	temperature float64
+	effort      unified.Effort
+	thinking    unified.ThinkingMode
 	tools       []unified.Tool
 	toolChoice  unified.ToolChoice
 	system      []string

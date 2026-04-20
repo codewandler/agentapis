@@ -11,13 +11,15 @@ func TestNewRequestBuilderBuildsRequest(t *testing.T) {
 		Model("gpt-4o-mini").
 		MaxTokens(256).
 		Temperature(0.2).
+		Effort(unified.EffortHigh).
+		Thinking(unified.ThinkingModeOn).
 		Instructions("Answer tersely.", "Prefer bullets.").
 		ToolChoice(unified.ToolChoiceAuto{}).
 		CacheHint(&unified.CacheHint{Enabled: true, TTL: "1h"}).
 		User("hello").
 		ToolResult("call_1", `{"ok":true}`).
 		Build()
-	if req.Model != "gpt-4o-mini" || req.MaxTokens != 256 || req.Temperature != 0.2 || len(req.Instructions) != 2 || len(req.Inputs) != 2 || req.CacheHint == nil || !req.CacheHint.Enabled {
+	if req.Model != "gpt-4o-mini" || req.MaxTokens != 256 || req.Temperature != 0.2 || req.Effort != unified.EffortHigh || req.Thinking != unified.ThinkingModeOn || len(req.Instructions) != 2 || len(req.Inputs) != 2 || req.CacheHint == nil || !req.CacheHint.Enabled {
 		t.Fatalf("unexpected request: %#v", req)
 	}
 	if _, ok := req.ToolChoice.(unified.ToolChoiceAuto); !ok {
