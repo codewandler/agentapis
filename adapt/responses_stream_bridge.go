@@ -253,13 +253,19 @@ func usageFromResponses(u *responses.ResponseUsage) *unified.StreamUsage {
 	if newInput < 0 {
 		newInput = 0
 	}
+	reasoning := 0
+	if u.OutputTokensDetails != nil {
+		reasoning = u.OutputTokensDetails.ReasoningTokens
+	}
+	output := u.OutputTokens - reasoning
+	if output < 0 {
+		output = 0
+	}
 	tokens := unified.TokenItems{
 		{Kind: unified.TokenKindInputNew, Count: newInput},
 		{Kind: unified.TokenKindInputCacheRead, Count: cacheRead},
-		{Kind: unified.TokenKindOutput, Count: u.OutputTokens},
-	}
-	if u.OutputTokensDetails != nil && u.OutputTokensDetails.ReasoningTokens > 0 {
-		tokens = append(tokens, unified.TokenItem{Kind: unified.TokenKindOutputReasoning, Count: u.OutputTokensDetails.ReasoningTokens})
+		{Kind: unified.TokenKindOutput, Count: output},
+		{Kind: unified.TokenKindOutputReasoning, Count: reasoning},
 	}
 	tokens = tokens.NonZero()
 	return &unified.StreamUsage{Input: tokens.InputTokens(), Output: tokens.OutputTokens(), Tokens: tokens}

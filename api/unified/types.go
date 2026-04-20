@@ -193,7 +193,8 @@ const (
 	TokenKindInputCacheWrite TokenKind = "input.cache_write"
 	// TokenKindOutputReasoning is the provider-reported reasoning/thinking subset of output tokens.
 	TokenKindOutputReasoning TokenKind = "output.reasoning"
-	// TokenKindOutput is total output tokens as reported by the upstream provider.
+	// TokenKindOutput is the non-reasoning portion of output tokens.
+	// The full output total is TokenKindOutput + TokenKindOutputReasoning.
 	TokenKindOutput TokenKind = "output"
 )
 
@@ -216,8 +217,8 @@ type InputTokens struct {
 }
 
 // OutputTokens is the canonical unified breakdown for response output tokens.
-// Total is the full provider-reported output token count and Reasoning is the
-// provider-reported reasoning subset when available.
+// The invariant is: Total = Output + Reasoning, where Output is represented by
+// TokenKindOutput and Reasoning by TokenKindOutputReasoning.
 type OutputTokens struct {
 	Total     int `json:"total"`
 	Reasoning int `json:"reasoning"`
@@ -247,9 +248,11 @@ func (t TokenItems) InputTokens() InputTokens {
 
 // OutputTokens derives canonical unified output usage from token items.
 func (t TokenItems) OutputTokens() OutputTokens {
+	output := t.Count(TokenKindOutput)
+	reasoning := t.Count(TokenKindOutputReasoning)
 	return OutputTokens{
-		Total:     t.Count(TokenKindOutput),
-		Reasoning: t.Count(TokenKindOutputReasoning),
+		Total:     output + reasoning,
+		Reasoning: reasoning,
 	}
 }
 

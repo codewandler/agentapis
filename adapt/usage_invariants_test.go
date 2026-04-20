@@ -71,6 +71,9 @@ func TestResponsesUsageDerivesNewFromTotalAndCacheRead(t *testing.T) {
 	if got, want := usage.Output.Total, 40; got != want {
 		t.Fatalf("output total = %d, want %d", got, want)
 	}
+	if got, want := usage.Tokens.Count(unified.TokenKindOutput), 33; got != want {
+		t.Fatalf("output tokens = %d, want %d", got, want)
+	}
 	if got, want := usage.Output.Reasoning, 7; got != want {
 		t.Fatalf("output reasoning = %d, want %d", got, want)
 	}
@@ -109,6 +112,9 @@ func TestCompletionsUsageHandlesPromptCacheAndReasoningDetails(t *testing.T) {
 	if got, want := event.Usage.Output.Total, 30; got != want {
 		t.Fatalf("output total = %d, want %d", got, want)
 	}
+	if got, want := event.Usage.Tokens.Count(unified.TokenKindOutput), 21; got != want {
+		t.Fatalf("output tokens = %d, want %d", got, want)
+	}
 	if got, want := event.Usage.Output.Reasoning, 9; got != want {
 		t.Fatalf("output reasoning = %d, want %d", got, want)
 	}
@@ -131,7 +137,7 @@ func TestNewUsageEventDerivesStructuredUsageFromTokens(t *testing.T) {
 	if got, want := ev.Usage.Input.New, 11; got != want {
 		t.Fatalf("input new = %d, want %d", got, want)
 	}
-	if got, want := ev.Usage.Output.Total, 17; got != want {
+	if got, want := ev.Usage.Output.Total, 21; got != want {
 		t.Fatalf("output total = %d, want %d", got, want)
 	}
 	if got, want := ev.Usage.Output.Reasoning, 4; got != want {

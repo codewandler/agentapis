@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## v0.3.2 - 2026-04-20
+
+- make unified output token accounting non-overlapping: output excludes reasoning and total includes both
+- align Responses and Chat Completions adapters with output-minus-reasoning semantics
+- keep canonical input invariant as total = cache_read + cache_write + new
+- extend invariant tests to cover non-overlapping output token semantics
+
 ## v0.3.1 - 2026-04-20
 
 - normalize unified stream usage into structured input/output token breakdowns

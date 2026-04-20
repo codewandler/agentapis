@@ -24,7 +24,7 @@ func TestTokenItemsDeriveStructuredUsage(t *testing.T) {
 		t.Fatalf("total = %d, want %d", got, want)
 	}
 	output := tokens.OutputTokens()
-	if got, want := output.Total, 9; got != want {
+	if got, want := output.Total, 11; got != want {
 		t.Fatalf("output total = %d, want %d", got, want)
 	}
 	if got, want := output.Reasoning, 2; got != want {

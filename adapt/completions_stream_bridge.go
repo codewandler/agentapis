@@ -31,10 +31,14 @@ func MapCompletionsEvent(chunk *completions.Chunk) (unified.StreamEvent, bool, e
 		if newInput < 0 {
 			newInput = 0
 		}
+		output := chunk.Usage.CompletionTokens - reasoning
+		if output < 0 {
+			output = 0
+		}
 		tokens := unified.TokenItems{
 			{Kind: unified.TokenKindInputNew, Count: newInput},
 			{Kind: unified.TokenKindInputCacheRead, Count: cacheRead},
-			{Kind: unified.TokenKindOutput, Count: chunk.Usage.CompletionTokens},
+			{Kind: unified.TokenKindOutput, Count: output},
 			{Kind: unified.TokenKindOutputReasoning, Count: reasoning},
 		}.NonZero()
 		out.Type = unified.StreamEventUsage
