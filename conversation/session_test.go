@@ -907,3 +907,84 @@ func TestSessionBuildRequestRequestValuesOverrideDefaultEffortAndThinking(t *tes
 		t.Fatalf("expected request override effort/thinking, got %#v", req)
 	}
 }
+
+func TestSessionBuildRequestUsesDefaultCacheHint(t *testing.T) {
+	t.Parallel()
+	s := New(&fakeStreamer{}, WithModel("gpt-4o-mini"), WithCacheHint(&unified.CacheHint{Enabled: true, TTL: "1h"}))
+	req, err := s.BuildRequest(Request{Inputs: []Input{{Role: unified.RoleUser, Text: "ping"}}})
+	if err != nil {
+		t.Fatalf("BuildRequest() error = %v", err)
+	}
+	if req.CacheHint == nil || !req.CacheHint.Enabled || req.CacheHint.TTL != "1h" {
+		t.Fatalf("expected default cache hint, got %#v", req.CacheHint)
+	}
+}
+
+func TestSessionBuildRequestRequestCacheHintOverridesDefault(t *testing.T) {
+	t.Parallel()
+	s := New(&fakeStreamer{}, WithModel("gpt-4o-mini"), WithCacheHint(&unified.CacheHint{Enabled: true, TTL: "1h"}))
+	req, err := s.BuildRequest(Request{CacheHint: &unified.CacheHint{Enabled: true, TTL: "5m"}, Inputs: []Input{{Role: unified.RoleUser, Text: "ping"}}})
+	if err != nil {
+		t.Fatalf("BuildRequest() error = %v", err)
+	}
+	if req.CacheHint == nil || req.CacheHint.TTL != "5m" {
+		t.Fatalf("expected request cache hint override, got %#v", req.CacheHint)
+	}
+}
+
+func TestSessionBuildRequestCachePolicyOffSuppressesDefaultCacheHint(t *testing.T) {
+	t.Parallel()
+	s := New(&fakeStreamer{}, WithModel("gpt-4o-mini"), WithCacheHint(&unified.CacheHint{Enabled: true, TTL: "1h"}), WithCachePolicy(CachePolicyOn))
+	req, err := s.BuildRequest(Request{CachePolicy: CachePolicyOff, Inputs: []Input{{Role: unified.RoleUser, Text: "ping"}}})
+	if err != nil {
+		t.Fatalf("BuildRequest() error = %v", err)
+	}
+	if req.CacheHint != nil {
+		t.Fatalf("expected cache policy off to suppress cache hint, got %#v", req.CacheHint)
+	}
+}
+
+func TestSessionBuildRequestCachePolicyOnDerivesTopLevelHint(t *testing.T) {
+	t.Parallel()
+	s := New(&fakeStreamer{}, WithModel("gpt-4o-mini"), WithCachePolicy(CachePolicyOn))
+	req, err := s.BuildRequest(Request{Inputs: []Input{{Role: unified.RoleUser, Text: "ping"}}})
+	if err != nil {
+		t.Fatalf("BuildRequest() error = %v", err)
+	}
+	if req.CacheHint == nil || !req.CacheHint.Enabled || req.CacheHint.TTL != "1h" {
+		t.Fatalf("expected derived cache hint, got %#v", req.CacheHint)
+	}
+}
+
+func TestSessionBuildRequestCachePolicyProgressiveMarksStableReplayMessages(t *testing.T) {
+	t.Parallel()
+	fs := &fakeStreamer{streams: [][]client.StreamResult{completedText("resp_1", "pong"), completedText("resp_2", "again")}}
+	s := New(fs, WithModel("gpt-4o-mini"), WithStrategy(StrategyReplay), WithCachePolicy(CachePolicyProgressive))
+	stream, _ := s.RequestUnified(context.Background(), Request{Inputs: []Input{{Role: unified.RoleUser, Text: "first"}}})
+	drain(stream)
+	req, err := s.BuildRequest(Request{Inputs: []Input{{Role: unified.RoleUser, Text: "second"}}})
+	if err != nil {
+		t.Fatalf("BuildRequest() error = %v", err)
+	}
+	if len(req.Messages) < 3 {
+		t.Fatalf("expected replay messages, got %#v", req.Messages)
+	}
+	if req.Messages[0].CacheHint == nil || !req.Messages[0].CacheHint.Enabled {
+		t.Fatalf("expected stable first replay message to be cacheable, got %#v", req.Messages[0])
+	}
+	if req.Messages[len(req.Messages)-1].CacheHint != nil {
+		t.Fatalf("expected newest pending message not to be cacheable under progressive policy, got %#v", req.Messages[len(req.Messages)-1])
+	}
+}
+
+func TestSessionBuildRequestExplicitCacheHintWinsOverPolicyOff(t *testing.T) {
+	t.Parallel()
+	s := New(&fakeStreamer{}, WithModel("gpt-4o-mini"), WithCacheHint(&unified.CacheHint{Enabled: true, TTL: "1h"}), WithCachePolicy(CachePolicyOn))
+	req, err := s.BuildRequest(Request{CacheHint: &unified.CacheHint{Enabled: true, TTL: "5m"}, CachePolicy: CachePolicyOff, Inputs: []Input{{Role: unified.RoleUser, Text: "ping"}}})
+	if err != nil {
+		t.Fatalf("BuildRequest() error = %v", err)
+	}
+	if req.CacheHint == nil || req.CacheHint.TTL != "5m" {
+		t.Fatalf("expected explicit request cache hint to win over policy off, got %#v", req.CacheHint)
+	}
+}

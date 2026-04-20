@@ -25,6 +25,8 @@ func New(streamer Streamer, opts ...Option) *Session {
 			temperature: cfg.temperature,
 			effort:      cfg.effort,
 			thinking:    cfg.thinking,
+			cacheHint:   func() *unified.CacheHint { if cfg.cacheHint == nil { return nil }; cp := *cfg.cacheHint; return &cp }(),
+			cachePolicy: cfg.cachePolicy,
 			tools:       append([]unified.Tool(nil), cfg.tools...),
 			toolChoice:  cfg.toolChoice,
 			system:      append([]string(nil), cfg.system...),
@@ -166,7 +168,7 @@ func (s *Session) buildProjectionContextLocked(req Request) (projectionContext, 
 		effectiveEffort = s.defaults.effort
 	}
 	effectiveThinking := req.Thinking
-	if effectiveThinking.IsEmpty() {
+	if effectiveThinking == "" {
 		effectiveThinking = s.defaults.thinking
 	}
 	tools := cloneTools(s.defaults.tools)
@@ -199,9 +201,13 @@ func (s *Session) buildProjectionContextLocked(req Request) (projectionContext, 
 		return projectionContext{}, err
 	}
 	out := unified.Request{Model: effectiveModel, MaxTokens: effectiveMaxTokens, Temperature: effectiveTemperature, Effort: effectiveEffort, Thinking: effectiveThinking, Tools: tools, ToolChoice: toolChoice, Messages: cloneMessages(msgs)}
-	if req.CacheHint != nil {
-		h := *req.CacheHint
+	effectiveCacheHint, effectiveCachePolicy := resolveCacheSettings(req, s.defaults)
+	if effectiveCacheHint != nil {
+		h := *effectiveCacheHint
 		out.CacheHint = &h
+	}
+	if effectiveCachePolicy != CachePolicyOff && len(out.Messages) > 0 {
+		out.Messages = applyCachePolicy(out.Messages, effectiveCachePolicy, effectiveCacheHint, strategy)
 	}
 	if strategy == StrategyResponsesPreviousResponseID {
 		ensureResponsesExtras(&out).PreviousResponseID = s.native.lastResponseID
@@ -528,4 +534,58 @@ func ensureResponsesExtras(req *unified.Request) *unified.ResponsesExtras {
 		req.Extras.Responses = &unified.ResponsesExtras{}
 	}
 	return req.Extras.Responses
+}
+
+
+func resolveCacheSettings(req Request, defaults sessionDefaults) (*unified.CacheHint, CachePolicy) {
+	policy := req.CachePolicy
+	if policy == CachePolicySessionDefault {
+		policy = defaults.cachePolicy
+	}
+	if req.CacheHint != nil {
+		h := *req.CacheHint
+		return &h, policy
+	}
+	if policy == CachePolicyOff {
+		return nil, CachePolicyOff
+	}
+	if defaults.cacheHint != nil {
+		h := *defaults.cacheHint
+		return &h, policy
+	}
+	if policy == CachePolicyOn || policy == CachePolicyProgressive {
+		return &unified.CacheHint{Enabled: true, TTL: "1h"}, policy
+	}
+	return nil, policy
+}
+
+func applyCachePolicy(msgs []unified.Message, policy CachePolicy, hint *unified.CacheHint, strategy Strategy) []unified.Message {
+	if policy == CachePolicyOff || hint == nil {
+		return cloneMessages(msgs)
+	}
+	out := cloneMessages(msgs)
+	if strategy == StrategyResponsesPreviousResponseID {
+		return out
+	}
+	apply := func(m *unified.Message) {
+		cp := *hint
+		m.CacheHint = &cp
+	}
+	switch policy {
+	case CachePolicyOn:
+		for i := range out {
+			apply(&out[i])
+		}
+	case CachePolicyProgressive:
+		stableEnd := len(out) - 1
+		if stableEnd < 0 {
+			return out
+		}
+		for i := 0; i < stableEnd; i++ {
+			apply(&out[i])
+		}
+	case CachePolicySessionDefault:
+		return out
+	}
+	return out
 }

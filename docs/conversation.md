@@ -120,3 +120,25 @@ Replay validation can happen at multiple layers.
 - protocol bridges in `adapt` may still reject lower-level request shapes that are not representable for a specific protocol or provider
 
 This means projector validation is an early guardrail, not a guarantee that no deeper bridge error is possible.
+
+## Cache controls
+
+`conversation.Request` supports both exact `CacheHint` overrides and higher-level `CachePolicy` intent.
+
+Recommended precedence:
+
+1. per-request `CacheHint`
+2. per-request `CachePolicy`
+3. session default `CacheHint`
+4. session default `CachePolicy`
+
+An explicit per-request `CacheHint` always wins for the top-level request hint, even when `CachePolicyOff` is also set. Policy may still influence replay message shaping where applicable.
+
+Policies currently supported:
+
+- `CachePolicyOff`
+- `CachePolicyOn`
+- `CachePolicyProgressive`
+- `CachePolicySessionDefault`
+
+`CachePolicyProgressive` is replay-oriented and currently applies cache hints only to stable earlier replay messages, not the newest pending message.

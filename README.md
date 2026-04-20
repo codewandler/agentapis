@@ -179,6 +179,8 @@ func main() {
 
 `Session.ProjectMessages(...)` exposes the exact outbound replay message list for the next turn. `Session.BuildRequest(...)` exposes the final unified request after strategy selection and message projection. `Session.Request(...)` exposes the smaller agent-facing event stream with concrete event types such as `TextDeltaEvent`, `ToolCallEvent`, `UsageEvent`, and `CompletedEvent`. `Session.RequestUnified(...)` remains available as the richer lower-level escape hatch. Custom `conversation.MessageProjector` implementations can validate or shape replay messages for service-specific quirks without mutating canonical session history.
 
+Cache controls can be expressed either as an exact hint (`CacheHint`) or as higher-level intent (`CachePolicy`). `CachePolicyProgressive` is replay-oriented and applies cache hints only to stable earlier replay messages, not the newest pending message. Exact per-request `CacheHint` overrides always win over policy-derived top-level hinting.
+
 ## Stability and Release Notes
 
 The `conversation` package and `conversation.MessageProjector` are public release-facing APIs.

@@ -52,6 +52,16 @@ type ProjectionDefaults struct {
 	Developer  []string           `json:"developer,omitempty"`
 }
 
+// CachePolicy controls how cache hints are derived when no exact CacheHint override is supplied.
+type CachePolicy int
+
+const (
+	CachePolicySessionDefault CachePolicy = iota
+	CachePolicyOff
+	CachePolicyOn
+	CachePolicyProgressive
+)
+
 // Request is the caller-facing payload for the next conversation step.
 type Request struct {
 	Model        string               `json:"model,omitempty"`
@@ -63,6 +73,7 @@ type Request struct {
 	Tools        []unified.Tool       `json:"tools,omitempty"`
 	ToolChoice   unified.ToolChoice   `json:"tool_choice,omitempty"`
 	CacheHint    *unified.CacheHint   `json:"cache_hint,omitempty"`
+	CachePolicy  CachePolicy          `json:"cache_policy,omitempty"`
 	Inputs       []Input              `json:"inputs,omitempty"`
 }
 
@@ -109,6 +120,8 @@ type sessionDefaults struct {
 	temperature float64
 	effort      unified.Effort
 	thinking    unified.ThinkingMode
+	cacheHint   *unified.CacheHint
+	cachePolicy CachePolicy
 	tools       []unified.Tool
 	toolChoice  unified.ToolChoice
 	system      []string

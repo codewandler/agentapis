@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## v0.7.1 - 2026-04-20
+
+### Fixed
+
+- make explicit per-request `CacheHint` override always win over policy-derived top-level cache behavior
+- clarify cache control precedence and replay-oriented cache policy semantics in README and conversation docs
+
 ## v0.6.0 - 2026-04-20
 
 ### Added

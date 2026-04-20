@@ -17,6 +17,7 @@ func (b *Builder) Thinking(v unified.ThinkingMode) *Builder { b.req.Thinking = v
 func (b *Builder) Instructions(lines ...string) *Builder { b.req.Instructions = append(b.req.Instructions, lines...); return b }
 func (b *Builder) Tools(tools []unified.Tool) *Builder { b.req.Tools = append([]unified.Tool(nil), tools...); return b }
 func (b *Builder) ToolChoice(choice unified.ToolChoice) *Builder { b.req.ToolChoice = choice; return b }
+func (b *Builder) CachePolicy(p CachePolicy) *Builder { b.req.CachePolicy = p; return b }
 func (b *Builder) CacheHint(h *unified.CacheHint) *Builder {
 	if h == nil {
 		b.req.CacheHint = nil
