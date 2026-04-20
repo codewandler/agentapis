@@ -6,14 +6,16 @@ import "github.com/codewandler/agentapis/api/unified"
 type Option func(*config)
 
 type config struct {
-	model      string
-	tools      []unified.Tool
-	toolChoice unified.ToolChoice
-	system     []string
-	developer  []string
-	strategy   Strategy
-	caps       Capabilities
-	projector  MessageProjector
+	model       string
+	maxTokens   int
+	temperature float64
+	tools       []unified.Tool
+	toolChoice  unified.ToolChoice
+	system      []string
+	developer   []string
+	strategy    Strategy
+	caps        Capabilities
+	projector   MessageProjector
 }
 
 func defaultConfig() config { return config{strategy: StrategyAuto, projector: DefaultMessageProjector{}} }
@@ -29,6 +31,8 @@ func applyOptions(opts []Option) config {
 }
 
 func WithModel(model string) Option { return func(c *config) { c.model = model } }
+func WithMaxTokens(max int) Option { return func(c *config) { c.maxTokens = max } }
+func WithTemperature(v float64) Option { return func(c *config) { c.temperature = v } }
 func WithTools(tools []unified.Tool) Option { return func(c *config) { c.tools = append([]unified.Tool(nil), tools...) } }
 func WithToolChoice(choice unified.ToolChoice) Option { return func(c *config) { c.toolChoice = choice } }
 func WithSystem(lines ...string) Option { return func(c *config) { c.system = append([]string(nil), lines...) } }

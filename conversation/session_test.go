@@ -835,3 +835,39 @@ func TestSessionBuildRequestCarriesTopLevelCacheHint(t *testing.T) {
 		t.Fatalf("expected propagated top-level cache hint, got %#v", req.CacheHint)
 	}
 }
+
+func TestSessionBuildRequestCarriesMaxTokensAndTemperature(t *testing.T) {
+	t.Parallel()
+	s := New(&fakeStreamer{}, WithModel("gpt-4o-mini"))
+	req, err := s.BuildRequest(Request{MaxTokens: 321, Temperature: 0.7, Inputs: []Input{{Role: unified.RoleUser, Text: "ping"}}})
+	if err != nil {
+		t.Fatalf("BuildRequest() error = %v", err)
+	}
+	if req.MaxTokens != 321 || req.Temperature != 0.7 {
+		t.Fatalf("expected propagated max_tokens/temperature, got %#v", req)
+	}
+}
+
+func TestSessionBuildRequestUsesDefaultMaxTokensAndTemperature(t *testing.T) {
+	t.Parallel()
+	s := New(&fakeStreamer{}, WithModel("gpt-4o-mini"), WithMaxTokens(111), WithTemperature(0.3))
+	req, err := s.BuildRequest(Request{Inputs: []Input{{Role: unified.RoleUser, Text: "ping"}}})
+	if err != nil {
+		t.Fatalf("BuildRequest() error = %v", err)
+	}
+	if req.MaxTokens != 111 || req.Temperature != 0.3 {
+		t.Fatalf("expected default max_tokens/temperature, got %#v", req)
+	}
+}
+
+func TestSessionBuildRequestRequestValuesOverrideDefaultMaxTokensAndTemperature(t *testing.T) {
+	t.Parallel()
+	s := New(&fakeStreamer{}, WithModel("gpt-4o-mini"), WithMaxTokens(111), WithTemperature(0.3))
+	req, err := s.BuildRequest(Request{MaxTokens: 222, Temperature: 0.8, Inputs: []Input{{Role: unified.RoleUser, Text: "ping"}}})
+	if err != nil {
+		t.Fatalf("BuildRequest() error = %v", err)
+	}
+	if req.MaxTokens != 222 || req.Temperature != 0.8 {
+		t.Fatalf("expected request override max_tokens/temperature, got %#v", req)
+	}
+}

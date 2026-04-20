@@ -20,11 +20,13 @@ func New(streamer Streamer, opts ...Option) *Session {
 	return &Session{
 		streamer: streamer,
 		defaults: sessionDefaults{
-			model:      cfg.model,
-			tools:      append([]unified.Tool(nil), cfg.tools...),
-			toolChoice: cfg.toolChoice,
-			system:     append([]string(nil), cfg.system...),
-			developer:  append([]string(nil), cfg.developer...),
+			model:       cfg.model,
+			maxTokens:   cfg.maxTokens,
+			temperature: cfg.temperature,
+			tools:       append([]unified.Tool(nil), cfg.tools...),
+			toolChoice:  cfg.toolChoice,
+			system:      append([]string(nil), cfg.system...),
+			developer:   append([]string(nil), cfg.developer...),
 		},
 		strategy:  cfg.strategy,
 		caps:      cfg.caps,
@@ -149,6 +151,14 @@ func (s *Session) buildProjectionContextLocked(req Request) (projectionContext, 
 	if strategy == StrategyResponsesPreviousResponseID && s.native.lastResponseID == "" {
 		strategy = StrategyReplay
 	}
+	effectiveMaxTokens := req.MaxTokens
+	if effectiveMaxTokens == 0 {
+		effectiveMaxTokens = s.defaults.maxTokens
+	}
+	effectiveTemperature := req.Temperature
+	if effectiveTemperature == 0 {
+		effectiveTemperature = s.defaults.temperature
+	}
 	tools := cloneTools(s.defaults.tools)
 	if len(req.Tools) > 0 {
 		tools = cloneTools(req.Tools)
@@ -178,7 +188,7 @@ func (s *Session) buildProjectionContextLocked(req Request) (projectionContext, 
 	if err != nil {
 		return projectionContext{}, err
 	}
-	out := unified.Request{Model: effectiveModel, Tools: tools, ToolChoice: toolChoice, Messages: cloneMessages(msgs)}
+	out := unified.Request{Model: effectiveModel, MaxTokens: effectiveMaxTokens, Temperature: effectiveTemperature, Tools: tools, ToolChoice: toolChoice, Messages: cloneMessages(msgs)}
 	if req.CacheHint != nil {
 		h := *req.CacheHint
 		out.CacheHint = &h

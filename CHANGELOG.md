@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## v0.6.0 - 2026-04-20
+
+### Added
+
+- add per-request `MaxTokens` and `Temperature` to `conversation.Request`
+- add request-builder helpers `Builder.MaxTokens(...)` and `Builder.Temperature(...)`
+- add session defaults `WithMaxTokens(...)` and `WithTemperature(...)` for conversation sessions
+- add top-level cache hint support to `conversation.Request` and request building
+
+### Changed
+
+- make conversation request building propagate `max_tokens`, `temperature`, and `cache_hint` into the final unified request
+- make session defaults apply to conversation request building unless overridden per request
+- improve the example REPL with live text/reasoning streaming, detailed usage display, top-level cache hint wiring, and OpenAI model selection via `-m`
+
 ## v0.5.0 - 2026-04-20
 
 ### Added

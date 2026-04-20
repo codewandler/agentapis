@@ -10,6 +10,8 @@ type Builder struct {
 func NewRequest() *Builder { return &Builder{} }
 
 func (b *Builder) Model(model string) *Builder { b.req.Model = model; return b }
+func (b *Builder) MaxTokens(max int) *Builder { b.req.MaxTokens = max; return b }
+func (b *Builder) Temperature(v float64) *Builder { b.req.Temperature = v; return b }
 func (b *Builder) Instructions(lines ...string) *Builder { b.req.Instructions = append(b.req.Instructions, lines...); return b }
 func (b *Builder) Tools(tools []unified.Tool) *Builder { b.req.Tools = append([]unified.Tool(nil), tools...); return b }
 func (b *Builder) ToolChoice(choice unified.ToolChoice) *Builder { b.req.ToolChoice = choice; return b }

@@ -55,6 +55,8 @@ type ProjectionDefaults struct {
 // Request is the caller-facing payload for the next conversation step.
 type Request struct {
 	Model        string               `json:"model,omitempty"`
+	MaxTokens    int                  `json:"max_tokens,omitempty"`
+	Temperature  float64              `json:"temperature,omitempty"`
 	Instructions []string             `json:"instructions,omitempty"`
 	Tools        []unified.Tool       `json:"tools,omitempty"`
 	ToolChoice   unified.ToolChoice   `json:"tool_choice,omitempty"`
@@ -100,11 +102,13 @@ type Session struct {
 }
 
 type sessionDefaults struct {
-	model      string
-	tools      []unified.Tool
-	toolChoice unified.ToolChoice
-	system     []string
-	developer  []string
+	model       string
+	maxTokens   int
+	temperature float64
+	tools       []unified.Tool
+	toolChoice  unified.ToolChoice
+	system      []string
+	developer   []string
 }
 
 type nativeState struct {
