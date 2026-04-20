@@ -467,6 +467,7 @@ type CompletionsExtras struct {
 
 type ResponsesExtras struct {
 	PromptCacheRetention string         `json:"prompt_cache_retention,omitempty"`
+	PromptCacheKey       string         `json:"prompt_cache_key,omitempty"`
 	PreviousResponseID   string         `json:"previous_response_id,omitempty"`
 	ReasoningSummary     string         `json:"reasoning_summary,omitempty"`
 	Store                bool           `json:"store,omitempty"`

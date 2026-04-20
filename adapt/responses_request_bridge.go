@@ -63,6 +63,7 @@ func BuildResponsesRequest(r unified.Request, _ ...ResponsesOption) (*responses.
 	}
 	if rextras != nil {
 		out.PromptCacheRetention = rextras.PromptCacheRetention
+		out.PromptCacheKey = rextras.PromptCacheKey
 		out.PreviousResponseID = rextras.PreviousResponseID
 		out.Store = rextras.Store
 		out.ParallelToolCalls = rextras.ParallelToolCalls
@@ -186,6 +187,9 @@ func RequestFromResponses(r responses.Request) (unified.Request, error) {
 	}
 	if r.PromptCacheRetention != "" {
 		ensureResponsesExtras(&u).PromptCacheRetention = r.PromptCacheRetention
+	}
+	if r.PromptCacheKey != "" {
+		ensureResponsesExtras(&u).PromptCacheKey = r.PromptCacheKey
 	}
 	if r.PreviousResponseID != "" {
 		ensureResponsesExtras(&u).PreviousResponseID = r.PreviousResponseID

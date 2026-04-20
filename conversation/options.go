@@ -21,6 +21,7 @@ type config struct {
 	caps           Capabilities
 	projector      MessageProjector
 	emitRateLimits bool
+	sessionID      string
 }
 
 func defaultConfig() config {
@@ -78,4 +79,12 @@ func WithMessageProjector(projector MessageProjector) Option {
 // events will be included in the event stream.
 func WithRateLimitEvents() Option {
 	return func(c *config) { c.emitRateLimits = true }
+}
+
+// WithSessionID sets a custom session ID for prompt caching.
+// If not set, a random ID is generated automatically.
+// The session ID is used as the PromptCacheKey for Responses API requests,
+// enabling server-side prompt caching across conversation turns.
+func WithSessionID(id string) Option {
+	return func(c *config) { c.sessionID = id }
 }

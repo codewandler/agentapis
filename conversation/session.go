@@ -2,12 +2,21 @@ package conversation
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"strings"
 
 	"github.com/codewandler/agentapis/api/unified"
 	"github.com/codewandler/agentapis/client"
 )
+
+// generateSessionID creates a random 32-character hex session ID.
+func generateSessionID() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
+}
 
 var (
 	ErrTurnInProgress = errors.New("conversation: turn already in progress")
@@ -18,6 +27,10 @@ var (
 // New creates a new conversation session with static defaults.
 func New(streamer Streamer, opts ...Option) *Session {
 	cfg := applyOptions(opts)
+	sessionID := cfg.sessionID
+	if sessionID == "" {
+		sessionID = generateSessionID()
+	}
 	return &Session{
 		streamer: streamer,
 		defaults: sessionDefaults{
@@ -42,6 +55,7 @@ func New(streamer Streamer, opts ...Option) *Session {
 		strategy:  cfg.strategy,
 		caps:      cfg.caps,
 		projector: cfg.projector,
+		sessionID: sessionID,
 	}
 }
 
@@ -92,6 +106,11 @@ func (s *Session) Reset() {
 	s.history = nil
 	s.reasoning = nil
 	s.native = nativeState{}
+}
+
+// SessionID returns the session's unique identifier used for prompt caching.
+func (s *Session) SessionID() string {
+	return s.sessionID
 }
 
 // ProjectMessages returns the outbound message projection for the next turn without starting a stream or mutating session state.
@@ -217,6 +236,11 @@ func (s *Session) buildProjectionContextLocked(req Request) (projectionContext, 
 	}
 	if strategy == StrategyResponsesPreviousResponseID {
 		ensureResponsesExtras(&out).PreviousResponseID = s.native.lastResponseID
+	}
+	// Set PromptCacheKey for server-side prompt caching (Responses API).
+	// This is set unconditionally since it's harmless for providers that don't support it.
+	if s.sessionID != "" {
+		ensureResponsesExtras(&out).PromptCacheKey = s.sessionID
 	}
 	return projectionContext{strategy: strategy, pending: pending, messages: msgs, request: out}, nil
 }

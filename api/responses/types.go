@@ -22,6 +22,7 @@ type Request struct {
 	User                 string          `json:"user,omitempty"`
 	Store                bool            `json:"store,omitempty"`
 	ParallelToolCalls    bool            `json:"parallel_tool_calls,omitempty"`
+	PromptCacheKey       string          `json:"prompt_cache_key,omitempty"`
 }
 
 type Reasoning struct {

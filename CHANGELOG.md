@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.9.0 - 2026-04-20
+
+### Added
+
+- add `PromptCacheKey` field to Responses API request for server-side prompt caching
+- add `PromptCacheKey` to `ResponsesExtras` in unified request types
+- add automatic session ID generation in conversation layer for prompt caching
+- add `WithSessionID(id)` option for custom session IDs in conversation sessions
+- add `Session.SessionID()` getter to retrieve the session's cache key
+
+### Changed
+
+- conversation sessions now automatically set `PromptCacheKey` to the session ID for all Responses API requests
+
 ## v0.8.0 - 2026-04-20
 
 ### Added

@@ -101,11 +101,12 @@ func (r ReasoningRecord) HasContent() bool { return r.Raw != "" || r.Summary != 
 
 // Session owns state for one ongoing conversation.
 type Session struct {
-	streamer Streamer
-	defaults sessionDefaults
+	streamer  Streamer
+	defaults  sessionDefaults
 	strategy  Strategy
 	caps      Capabilities
 	projector MessageProjector
+	sessionID string
 
 	mu        sync.Mutex
 	history   []unified.Message
