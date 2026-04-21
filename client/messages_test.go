@@ -151,3 +151,33 @@ func TestMessagesClientStreamWithOptionsForwardsMetadata(t *testing.T) {
 		t.Fatalf("unexpected response meta: %#v", responseMeta)
 	}
 }
+
+func TestMessagesClientStreamErrorsOnEmptyEventStream(t *testing.T) {
+	t.Parallel()
+
+	protocol := messagesapi.NewClient(
+		messagesapi.WithBaseURL("https://example.com"),
+		messagesapi.WithHTTPClient(&http.Client{Transport: FixedSSEResponse(http.StatusOK, "")}),
+	)
+
+	client := NewMessagesClient(protocol)
+	stream, err := client.Stream(context.Background(), unified.Request{
+		Model:     "claude",
+		MaxTokens: 16,
+		Messages:  []unified.Message{{Role: unified.RoleUser, Parts: []unified.Part{{Type: unified.PartTypeText, Text: "hi"}}}},
+	})
+	if err != nil {
+		t.Fatalf("Stream() error = %v", err)
+	}
+
+	var gotErr error
+	for item := range stream {
+		if item.Err != nil {
+			gotErr = item.Err
+			break
+		}
+	}
+	if gotErr == nil {
+		t.Fatal("expected stream error for empty event stream, got nil")
+	}
+}

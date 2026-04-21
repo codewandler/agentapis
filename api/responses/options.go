@@ -34,7 +34,7 @@ type config struct {
 }
 
 func defaultConfig() config {
-	return config{httpClient: http.DefaultClient, headers: make(http.Header)}
+	return config{httpClient: protocolcore.DefaultHTTPClient(), headers: make(http.Header)}
 }
 
 func applyOptions(opts []Option) config {

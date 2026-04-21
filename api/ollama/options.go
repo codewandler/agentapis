@@ -34,7 +34,7 @@ type config struct {
 }
 
 func defaultConfig() config {
-	return config{httpClient: http.DefaultClient, headers: make(http.Header)}
+	return config{httpClient: protocolcore.DefaultHTTPClient(), headers: make(http.Header)}
 }
 
 func applyOptions(opts []Option) config {
@@ -47,19 +47,61 @@ func applyOptions(opts []Option) config {
 	return cfg
 }
 
-func WithAPIKey(key string) Option                       { return func(c *config) { c.apiKey = key } }
-func WithBaseURL(url string) Option                      { return func(c *config) { c.baseURL = url } }
-func WithPath(path string) Option                        { return func(c *config) { c.path = path } }
-func WithErrorParser(fn ErrorParser) Option              { return func(c *config) { c.errorParser = fn } }
-func WithHeader(key, value string) Option                { return func(c *config) { c.headers.Add(key, value) } }
-func WithLogger(logger *slog.Logger) Option              { return func(c *config) { c.logger = logger } }
-func WithHTTPClient(client *http.Client) Option          { return func(c *config) { if client != nil { c.httpClient = client } } }
-func WithHeaderFunc(fn HeaderFunc) Option                { return func(c *config) { if fn != nil { c.headerFuncs = append(c.headerFuncs, fn) } } }
-func WithRequestTransform(fn RequestTransform) Option    { return func(c *config) { if fn != nil { c.requestTransforms = append(c.requestTransforms, fn) } } }
-func WithHTTPRequestMutator(fn HTTPRequestMutator) Option { return func(c *config) { if fn != nil { c.httpRequestMutators = append(c.httpRequestMutators, fn) } } }
-func WithEventTransform(fn EventTransform) Option        { return func(c *config) { if fn != nil { c.eventTransforms = append(c.eventTransforms, fn) } } }
-func WithRequestHook(fn RequestHook) Option              { return func(c *config) { if fn != nil { c.requestHooks = append(c.requestHooks, fn) } } }
-func WithResponseHook(fn ResponseHook) Option            { return func(c *config) { if fn != nil { c.responseHooks = append(c.responseHooks, fn) } } }
+func WithAPIKey(key string) Option          { return func(c *config) { c.apiKey = key } }
+func WithBaseURL(url string) Option         { return func(c *config) { c.baseURL = url } }
+func WithPath(path string) Option           { return func(c *config) { c.path = path } }
+func WithErrorParser(fn ErrorParser) Option { return func(c *config) { c.errorParser = fn } }
+func WithHeader(key, value string) Option   { return func(c *config) { c.headers.Add(key, value) } }
+func WithLogger(logger *slog.Logger) Option { return func(c *config) { c.logger = logger } }
+func WithHTTPClient(client *http.Client) Option {
+	return func(c *config) {
+		if client != nil {
+			c.httpClient = client
+		}
+	}
+}
+func WithHeaderFunc(fn HeaderFunc) Option {
+	return func(c *config) {
+		if fn != nil {
+			c.headerFuncs = append(c.headerFuncs, fn)
+		}
+	}
+}
+func WithRequestTransform(fn RequestTransform) Option {
+	return func(c *config) {
+		if fn != nil {
+			c.requestTransforms = append(c.requestTransforms, fn)
+		}
+	}
+}
+func WithHTTPRequestMutator(fn HTTPRequestMutator) Option {
+	return func(c *config) {
+		if fn != nil {
+			c.httpRequestMutators = append(c.httpRequestMutators, fn)
+		}
+	}
+}
+func WithEventTransform(fn EventTransform) Option {
+	return func(c *config) {
+		if fn != nil {
+			c.eventTransforms = append(c.eventTransforms, fn)
+		}
+	}
+}
+func WithRequestHook(fn RequestHook) Option {
+	return func(c *config) {
+		if fn != nil {
+			c.requestHooks = append(c.requestHooks, fn)
+		}
+	}
+}
+func WithResponseHook(fn ResponseHook) Option {
+	return func(c *config) {
+		if fn != nil {
+			c.responseHooks = append(c.responseHooks, fn)
+		}
+	}
+}
 
 func resolveHeaders(ctx context.Context, static http.Header, funcs []HeaderFunc, req *Request) (http.Header, error) {
 	out := protocolcore.CloneHeaders(static)

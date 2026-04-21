@@ -46,13 +46,6 @@ type retryTransport struct {
 	cfg  RetryConfig
 }
 
-func NewRetryTransport(base http.RoundTripper, cfg RetryConfig) http.RoundTripper {
-	if base == nil {
-		base = http.DefaultTransport
-	}
-	return &retryTransport{base: base, cfg: cfg.withDefaults()}
-}
-
 func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	var (
 		resp *http.Response
@@ -127,4 +120,11 @@ func (t *retryTransport) backoff(resp *http.Response, attempt int) time.Duration
 		return t.cfg.MaxBackoff
 	}
 	return delay
+}
+
+func NewRetryTransport(base http.RoundTripper, cfg RetryConfig) http.RoundTripper {
+	if base == nil {
+		base = DefaultHTTPTransport()
+	}
+	return &retryTransport{base: base, cfg: cfg.withDefaults()}
 }

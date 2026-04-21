@@ -22,3 +22,21 @@ func ReadAndRestoreBody(req *http.Request) ([]byte, error) {
 	req.ContentLength = int64(len(body))
 	return body, nil
 }
+
+func CloneRequestForRetry(req *http.Request) (*http.Request, error) {
+	cloned := req.Clone(req.Context())
+	if req.Body == nil {
+		return cloned, nil
+	}
+	if req.GetBody == nil {
+		return nil, io.ErrUnexpectedEOF
+	}
+	body, err := req.GetBody()
+	if err != nil {
+		return nil, err
+	}
+	cloned.Body = body
+	cloned.GetBody = req.GetBody
+	cloned.ContentLength = req.ContentLength
+	return cloned, nil
+}

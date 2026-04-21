@@ -86,3 +86,35 @@ func TestClientStreamAppliesTypedHooks(t *testing.T) {
 		t.Fatalf("unexpected response meta: %#v", responseMeta)
 	}
 }
+
+func TestClientStreamErrorsOnEmptyEventStream(t *testing.T) {
+	t.Parallel()
+
+	client := NewClient(
+		WithBaseURL("https://example.com"),
+		WithAPIKey("secret"),
+		WithHTTPClient(&http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": {"text/event-stream"}},
+				Body:       io.NopCloser(strings.NewReader("")),
+			}, nil
+		})}),
+	)
+
+	stream, err := client.Stream(context.Background(), Request{Model: "claude-real", MaxTokens: 16, Messages: []Message{{Role: "user", Content: "hi"}}})
+	if err != nil {
+		t.Fatalf("Stream() error = %v", err)
+	}
+
+	var gotErr error
+	for item := range stream {
+		if item.Err != nil {
+			gotErr = item.Err
+			break
+		}
+	}
+	if gotErr == nil {
+		t.Fatal("expected stream error for empty SSE body, got nil")
+	}
+}

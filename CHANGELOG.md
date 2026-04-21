@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.10.0 - 2026-04-21
+
+### Added
+
+- add custom default HTTP client with transparent decompression for brotli, zstd, gzip, and deflate responses
+- add `DefaultHTTPClient()` and `DefaultHTTPTransport()` to `protocolcore` for shared HTTP client with decompression support
+- add `Accept-Encoding: br, zstd, gzip, deflate` header on outgoing requests when not already set
+- add automatic retry with exponential backoff for empty SSE event streams (up to 2 retries)
+- add `ErrEmptyEventStream` sentinel error when stream ends without any events after retries
+- add `CloneRequestForRetry` helper for safely replaying HTTP requests on retry
+- add structured logging at all stream lifecycle points (request, response, events, retries, errors)
+- add comprehensive test coverage for empty-stream retry, decompression, and transport wiring
+
+### Changed
+
+- all API clients (`messages`, `completions`, `responses`, `ollama`) now default to `protocolcore.DefaultHTTPClient()` instead of `http.DefaultClient`
+- `NewRetryTransport` now defaults to `DefaultHTTPTransport()` (with decompression) instead of `http.DefaultTransport`
+- `Content-Length` header is only stripped from responses that are actually decompressed, preserving it for uncompressed responses
+
+### Dependencies
+
+- add `github.com/andybalholm/brotli` v1.2.1
+- add `github.com/klauspost/compress` v1.18.5
+
 ## v0.9.1 - 2026-04-21
 
 ### Fixed
