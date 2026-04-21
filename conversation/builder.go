@@ -35,4 +35,9 @@ func (b *Builder) ToolResult(callID, output string) *Builder {
 	b.req.Inputs = append(b.req.Inputs, Input{Role: unified.RoleTool, ToolResult: &ToolResult{ToolCallID: callID, Output: output}})
 	return b
 }
+
+func (b *Builder) ToolResultWithError(callID, output string, isError bool) *Builder {
+	b.req.Inputs = append(b.req.Inputs, Input{Role: unified.RoleTool, ToolResult: &ToolResult{ToolCallID: callID, Output: output, IsError: isError}})
+	return b
+}
 func (b *Builder) Build() Request { return b.req }
