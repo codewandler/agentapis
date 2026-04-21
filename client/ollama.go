@@ -18,6 +18,7 @@ type OllamaClient struct {
 	protocol          ollamaStreamer
 	requestTransforms []RequestTransform
 	eventTransforms   []EventTransform
+	costCalculator    CostCalculator
 }
 
 func NewOllamaClient(protocol ollamaStreamer, opts ...Option) *OllamaClient {
@@ -25,7 +26,7 @@ func NewOllamaClient(protocol ollamaStreamer, opts ...Option) *OllamaClient {
 	if protocol == nil {
 		protocol = ollamaapi.NewClient()
 	}
-	return &OllamaClient{protocol: protocol, requestTransforms: append([]RequestTransform(nil), cfg.requestTransforms...), eventTransforms: append([]EventTransform(nil), cfg.eventTransforms...)}
+	return &OllamaClient{protocol: protocol, requestTransforms: append([]RequestTransform(nil), cfg.requestTransforms...), eventTransforms: append([]EventTransform(nil), cfg.eventTransforms...), costCalculator: cfg.costCalculator}
 }
 
 func (c *OllamaClient) ListModels(ctx context.Context) (*ollamaapi.TagsResponse, error) {
@@ -93,6 +94,7 @@ func (c *OllamaClient) StreamWithOptions(ctx context.Context, req unified.Reques
 			if ignored {
 				continue
 			}
+			applyCostCalculator(&ev, c.costCalculator)
 			out <- StreamResult{Event: ev, RawJSON: append([]byte(nil), item.RawJSON...)}
 		}
 	}()

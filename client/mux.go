@@ -81,6 +81,7 @@ type muxConfig struct {
 	targetResolver    TargetResolver
 	requestTransforms []RequestTransform
 	eventTransforms   []EventTransform
+	costCalculator    CostCalculator
 }
 
 type MuxClient struct {
@@ -91,6 +92,7 @@ type MuxClient struct {
 	targetResolver    TargetResolver
 	requestTransforms []RequestTransform
 	eventTransforms   []EventTransform
+	costCalculator    CostCalculator
 }
 
 func NewMuxClient(opts ...MuxOption) *MuxClient {
@@ -108,6 +110,7 @@ func NewMuxClient(opts ...MuxOption) *MuxClient {
 		targetResolver:    cfg.targetResolver,
 		requestTransforms: append([]RequestTransform(nil), cfg.requestTransforms...),
 		eventTransforms:   append([]EventTransform(nil), cfg.eventTransforms...),
+		costCalculator:    cfg.costCalculator,
 	}
 }
 
@@ -145,6 +148,12 @@ func WithMuxEventTransform(fn EventTransform) MuxOption {
 			c.eventTransforms = append(c.eventTransforms, fn)
 		}
 	}
+}
+
+// WithMuxCostCalculator injects a cost calculator at the mux level.
+// This runs after both the sub-client and mux-level event transforms.
+func WithMuxCostCalculator(fn CostCalculator) MuxOption {
+	return func(c *muxConfig) { c.costCalculator = fn }
 }
 
 func (c *MuxClient) Stream(ctx context.Context, req unified.Request) (<-chan StreamResult, error) {
@@ -205,6 +214,7 @@ func (c *MuxClient) StreamWithOptions(ctx context.Context, req unified.Request, 
 			if ignored {
 				continue
 			}
+			applyCostCalculator(&ev, c.costCalculator)
 			out <- StreamResult{Event: ev, RawEventName: item.RawEventName, RawJSON: append([]byte(nil), item.RawJSON...)}
 		}
 	}()

@@ -181,3 +181,145 @@ func TestMessagesClientStreamErrorsOnEmptyEventStream(t *testing.T) {
 		t.Fatal("expected stream error for empty event stream, got nil")
 	}
 }
+
+func TestCostCalculatorEnrichesUsageEvents(t *testing.T) {
+	t.Parallel()
+
+	sseBody := "event: message_start\n" +
+		"data: {\"message\":{\"id\":\"msg_1\",\"model\":\"claude\",\"usage\":{\"input_tokens\":100}}}\n\n" +
+		"event: message_delta\n" +
+		"data: {\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":50}}\n\n"
+
+	protocol := messagesapi.NewClient(
+		messagesapi.WithBaseURL("https://example.com"),
+		messagesapi.WithHTTPClient(&http.Client{Transport: FixedSSEResponse(http.StatusOK, sseBody)}),
+	)
+
+	// Inject a cost calculator: $3/MTok input, $15/MTok output
+	client := NewMessagesClient(protocol,
+		WithCostCalculator(func(u unified.StreamUsage) unified.CostItems {
+			var costs unified.CostItems
+			if n := u.Tokens.Count(unified.TokenKindInputNew); n > 0 {
+				costs = append(costs, unified.CostItem{Kind: unified.CostKindInput, Amount: float64(n) * 3.0 / 1_000_000})
+			}
+			if n := u.Tokens.Count(unified.TokenKindOutput); n > 0 {
+				costs = append(costs, unified.CostItem{Kind: unified.CostKindOutput, Amount: float64(n) * 15.0 / 1_000_000})
+			}
+			return costs
+		}),
+	)
+
+	stream, err := client.Stream(context.Background(), unified.Request{
+		Model:     "claude",
+		MaxTokens: 16,
+		Messages:  []unified.Message{{Role: unified.RoleUser, Parts: []unified.Part{{Type: unified.PartTypeText, Text: "hi"}}}},
+	})
+	if err != nil {
+		t.Fatalf("Stream() error = %v", err)
+	}
+
+	var usageEvents []unified.StreamUsage
+	for item := range stream {
+		if item.Err != nil {
+			t.Fatalf("unexpected stream error: %v", item.Err)
+		}
+		if item.Event.Usage != nil {
+			usageEvents = append(usageEvents, *item.Event.Usage)
+		}
+	}
+
+	if len(usageEvents) == 0 {
+		t.Fatal("expected at least one usage event")
+	}
+
+	// The message_start event has input_tokens:100 → should have input cost
+	firstUsage := usageEvents[0]
+	if len(firstUsage.Costs) == 0 {
+		t.Fatal("expected costs on first usage event")
+	}
+	inputCost := firstUsage.Costs.ByKind(unified.CostKindInput)
+	wantInput := 100 * 3.0 / 1_000_000
+	if inputCost != wantInput {
+		t.Fatalf("expected input cost %g, got %g", wantInput, inputCost)
+	}
+
+	// The message_delta event has output_tokens:50 → should have output cost
+	if len(usageEvents) < 2 {
+		t.Fatal("expected two usage events")
+	}
+	secondUsage := usageEvents[1]
+	outputCost := secondUsage.Costs.ByKind(unified.CostKindOutput)
+	wantOutput := 50 * 15.0 / 1_000_000
+	if outputCost != wantOutput {
+		t.Fatalf("expected output cost %g, got %g", wantOutput, outputCost)
+	}
+}
+
+func TestCostCalculatorNilIsNoOp(t *testing.T) {
+	t.Parallel()
+
+	sseBody := "event: message_start\n" +
+		"data: {\"message\":{\"id\":\"msg_1\",\"model\":\"claude\",\"usage\":{\"input_tokens\":10}}}\n\n"
+
+	protocol := messagesapi.NewClient(
+		messagesapi.WithBaseURL("https://example.com"),
+		messagesapi.WithHTTPClient(&http.Client{Transport: FixedSSEResponse(http.StatusOK, sseBody)}),
+	)
+
+	// No cost calculator — costs should remain nil
+	client := NewMessagesClient(protocol)
+	stream, err := client.Stream(context.Background(), unified.Request{
+		Model:     "claude",
+		MaxTokens: 16,
+		Messages:  []unified.Message{{Role: unified.RoleUser, Parts: []unified.Part{{Type: unified.PartTypeText, Text: "hi"}}}},
+	})
+	if err != nil {
+		t.Fatalf("Stream() error = %v", err)
+	}
+
+	for item := range stream {
+		if item.Err != nil {
+			t.Fatalf("unexpected stream error: %v", item.Err)
+		}
+		if item.Event.Usage != nil && len(item.Event.Usage.Costs) > 0 {
+			t.Fatalf("expected no costs without calculator, got %v", item.Event.Usage.Costs)
+		}
+	}
+}
+
+func TestCostCalculatorReturningNilDoesNotSetCosts(t *testing.T) {
+	t.Parallel()
+
+	sseBody := "event: message_start\n" +
+		"data: {\"message\":{\"id\":\"msg_1\",\"model\":\"claude\",\"usage\":{\"input_tokens\":10}}}\n\n"
+
+	protocol := messagesapi.NewClient(
+		messagesapi.WithBaseURL("https://example.com"),
+		messagesapi.WithHTTPClient(&http.Client{Transport: FixedSSEResponse(http.StatusOK, sseBody)}),
+	)
+
+	// Calculator returns nil → costs should remain nil
+	client := NewMessagesClient(protocol,
+		WithCostCalculator(func(u unified.StreamUsage) unified.CostItems {
+			return nil
+		}),
+	)
+
+	stream, err := client.Stream(context.Background(), unified.Request{
+		Model:     "claude",
+		MaxTokens: 16,
+		Messages:  []unified.Message{{Role: unified.RoleUser, Parts: []unified.Part{{Type: unified.PartTypeText, Text: "hi"}}}},
+	})
+	if err != nil {
+		t.Fatalf("Stream() error = %v", err)
+	}
+
+	for item := range stream {
+		if item.Err != nil {
+			t.Fatalf("unexpected stream error: %v", item.Err)
+		}
+		if item.Event.Usage != nil && len(item.Event.Usage.Costs) > 0 {
+			t.Fatalf("expected no costs when calculator returns nil, got %v", item.Event.Usage.Costs)
+		}
+	}
+}

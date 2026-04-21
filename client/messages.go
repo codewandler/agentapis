@@ -17,6 +17,7 @@ type MessagesClient struct {
 	protocol          messagesStreamer
 	requestTransforms []RequestTransform
 	eventTransforms   []EventTransform
+	costCalculator    CostCalculator
 }
 
 func NewMessagesClient(protocol messagesStreamer, opts ...Option) *MessagesClient {
@@ -28,6 +29,7 @@ func NewMessagesClient(protocol messagesStreamer, opts ...Option) *MessagesClien
 		protocol:          protocol,
 		requestTransforms: append([]RequestTransform(nil), cfg.requestTransforms...),
 		eventTransforms:   append([]EventTransform(nil), cfg.eventTransforms...),
+		costCalculator:    cfg.costCalculator,
 	}
 }
 
@@ -88,6 +90,7 @@ func (c *MessagesClient) StreamWithOptions(ctx context.Context, req unified.Requ
 			if ignored {
 				continue
 			}
+			applyCostCalculator(&ev, c.costCalculator)
 			out <- StreamResult{Event: ev, RawEventName: item.RawEventName, RawJSON: append([]byte(nil), item.RawJSON...)}
 		}
 	}()

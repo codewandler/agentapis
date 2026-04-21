@@ -9,11 +9,17 @@ import (
 type RequestTransform func(ctx context.Context, req *unified.Request) error
 type EventTransform func(ctx context.Context, ev unified.StreamEvent) (unified.StreamEvent, bool, error)
 
+// CostCalculator derives monetary costs from a usage snapshot.
+// It is called once per usage event with the fully-populated StreamUsage.
+// Returning nil means no cost data is available for this event.
+type CostCalculator func(usage unified.StreamUsage) unified.CostItems
+
 type Option func(*config)
 
 type config struct {
 	requestTransforms []RequestTransform
 	eventTransforms   []EventTransform
+	costCalculator    CostCalculator
 }
 
 func applyOptions(opts []Option) config {
@@ -42,6 +48,13 @@ func WithEventTransform(fn EventTransform) Option {
 	}
 }
 
+// WithCostCalculator injects a function that derives monetary costs from usage data.
+// When set, every usage event in the stream is enriched with the returned CostItems
+// before being forwarded to the consumer. The calculator is called after event transforms.
+func WithCostCalculator(fn CostCalculator) Option {
+	return func(c *config) { c.costCalculator = fn }
+}
+
 func applyRequestTransforms(ctx context.Context, req *unified.Request, transforms []RequestTransform) error {
 	for _, transform := range transforms {
 		if err := transform(ctx, req); err != nil {
@@ -63,4 +76,14 @@ func applyEventTransforms(ctx context.Context, ev unified.StreamEvent, transform
 		ev = next
 	}
 	return ev, false, nil
+}
+
+// applyCostCalculator enriches a usage event with cost data when a calculator is configured.
+func applyCostCalculator(ev *unified.StreamEvent, calc CostCalculator) {
+	if calc == nil || ev.Usage == nil {
+		return
+	}
+	if costs := calc(*ev.Usage); len(costs) > 0 {
+		ev.Usage.Costs = costs
+	}
 }

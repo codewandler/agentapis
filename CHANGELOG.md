@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.13.0 - 2026-04-22
+
+### Added
+
+- add `client.CostCalculator` function type for deriving monetary costs from usage data
+- add `client.WithCostCalculator(fn)` option — enriches every usage event with `CostItems` before forwarding to the consumer
+- add `client.WithMuxCostCalculator(fn)` mux-level option — runs after sub-client and mux event transforms
+- cost calculation is wired into all client types: `MessagesClient`, `CompletionsClient`, `ResponsesClient`, `OllamaClient`, and `MuxClient`
+
 ## v0.12.0 - 2026-04-22
 
 ### Added

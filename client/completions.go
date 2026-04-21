@@ -17,6 +17,7 @@ type CompletionsClient struct {
 	protocol          completionsStreamer
 	requestTransforms []RequestTransform
 	eventTransforms   []EventTransform
+	costCalculator    CostCalculator
 }
 
 func NewCompletionsClient(protocol completionsStreamer, opts ...Option) *CompletionsClient {
@@ -28,6 +29,7 @@ func NewCompletionsClient(protocol completionsStreamer, opts ...Option) *Complet
 		protocol:          protocol,
 		requestTransforms: append([]RequestTransform(nil), cfg.requestTransforms...),
 		eventTransforms:   append([]EventTransform(nil), cfg.eventTransforms...),
+		costCalculator:    cfg.costCalculator,
 	}
 }
 
@@ -88,6 +90,7 @@ func (c *CompletionsClient) StreamWithOptions(ctx context.Context, req unified.R
 			if ignored {
 				continue
 			}
+			applyCostCalculator(&ev, c.costCalculator)
 			out <- StreamResult{Event: ev, RawEventName: item.RawEventName, RawJSON: append([]byte(nil), item.RawJSON...)}
 		}
 	}()
