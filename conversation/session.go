@@ -718,9 +718,11 @@ func applyCachePolicy(msgs []unified.Message, policy CachePolicy, hint *unified.
 	}
 	switch policy {
 	case CachePolicyOn:
-		for i := range out {
-			apply(&out[i])
+		last := len(out) - 1
+		if last < 0 {
+			return out
 		}
+		apply(&out[last])
 	case CachePolicyProgressive:
 		stableEnd := len(out) - 1
 		if stableEnd < 0 {
