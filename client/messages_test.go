@@ -57,8 +57,52 @@ func TestMessagesClientStreamsUnifiedEvents(t *testing.T) {
 	if events[0].Type != unified.StreamEventStarted {
 		t.Fatalf("expected started event, got %q", events[0].Type)
 	}
-	if events[1].Type != unified.StreamEventCompleted {
-		t.Fatalf("expected completed event, got %q", events[1].Type)
+	if events[1].Type != unified.StreamEventLifecycle {
+		t.Fatalf("expected lifecycle event, got %q", events[1].Type)
+	}
+	if events[1].Lifecycle == nil || events[1].Lifecycle.Scope != unified.LifecycleScopeResponse || events[1].Lifecycle.State != unified.LifecycleStateDone {
+		t.Fatalf("expected response done lifecycle, got %#v", events[1].Lifecycle)
+	}
+}
+
+func TestMessagesClientEmitsCompletedOnMessageStop(t *testing.T) {
+	t.Parallel()
+
+	sseBody := "event: message_start\n" +
+		"data: {\"message\":{\"id\":\"msg_1\",\"model\":\"claude\",\"usage\":{\"input_tokens\":1}}}\n\n" +
+		"event: message_delta\n" +
+		"data: {\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":2}}\n\n" +
+		"event: message_stop\n" +
+		"data: {}\n\n"
+
+	protocol := messagesapi.NewClient(
+		messagesapi.WithBaseURL("https://example.com"),
+		messagesapi.WithHTTPClient(&http.Client{Transport: FixedSSEResponse(http.StatusOK, sseBody)}),
+	)
+
+	client := NewMessagesClient(protocol)
+	stream, err := client.Stream(context.Background(), unified.Request{
+		Model:     "claude",
+		MaxTokens: 16,
+		Messages:  []unified.Message{{Role: unified.RoleUser, Parts: []unified.Part{{Type: unified.PartTypeText, Text: "hi"}}}},
+	})
+	if err != nil {
+		t.Fatalf("Stream() error = %v", err)
+	}
+
+	var events []unified.StreamEvent
+	for item := range stream {
+		if item.Err != nil {
+			t.Fatalf("unexpected stream error: %v", item.Err)
+		}
+		events = append(events, item.Event)
+	}
+
+	if len(events) != 3 {
+		t.Fatalf("expected 3 unified events, got %d", len(events))
+	}
+	if events[2].Type != unified.StreamEventCompleted || events[2].Completed == nil {
+		t.Fatalf("expected completed event on message_stop, got %#v", events[2])
 	}
 }
 

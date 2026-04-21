@@ -8,7 +8,8 @@ import (
 )
 
 type MessagesMapper struct {
-	responseID string
+	responseID  string
+	messageDone bool
 }
 
 func NewMessagesMapper() *MessagesMapper { return &MessagesMapper{} }
@@ -158,13 +159,12 @@ func (m *MessagesMapper) MapEvent(ev messages.StreamEvent) (unified.StreamEvent,
 
 	case *messages.MessageDeltaEvent:
 		return withRawEventPayload(withRawEventName(unified.StreamEvent{
-			Type: unified.StreamEventCompleted,
+			Type: unified.StreamEventLifecycle,
 			Lifecycle: &unified.Lifecycle{
 				Scope: unified.LifecycleScopeResponse,
 				State: unified.LifecycleStateDone,
 				Ref:   unified.StreamRef{ResponseID: m.responseID},
 			},
-			Completed: &unified.Completed{StopReason: mapMessagesStopReason(e.Delta.StopReason)},
 			Usage: usageFromMessagesFields(
 				e.Usage.InputTokens,
 				e.Usage.CacheCreationInputTokens,
@@ -176,8 +176,23 @@ func (m *MessagesMapper) MapEvent(ev messages.StreamEvent) (unified.StreamEvent,
 	case *messages.StreamErrorEvent:
 		return withRawEventPayload(withRawEventName(unified.StreamEvent{Type: unified.StreamEventError, Error: &unified.StreamError{Err: e}}, messages.EventError), source), false, nil
 
-	case *messages.PingEvent, *messages.MessageStopEvent:
+	case *messages.PingEvent:
 		return unified.StreamEvent{}, true, nil
+
+	case *messages.MessageStopEvent:
+		if m.messageDone {
+			return unified.StreamEvent{}, true, nil
+		}
+		m.messageDone = true
+		return withRawEventPayload(withRawEventName(unified.StreamEvent{
+			Type: unified.StreamEventCompleted,
+			Lifecycle: &unified.Lifecycle{
+				Scope: unified.LifecycleScopeResponse,
+				State: unified.LifecycleStateDone,
+				Ref:   unified.StreamRef{ResponseID: m.responseID},
+			},
+			Completed: &unified.Completed{StopReason: unified.StopReasonEndTurn},
+		}, messages.EventMessageStop), source), false, nil
 
 	case *messages.ContentBlockStopEvent:
 		return withRawEventPayload(withRawEventName(unified.StreamEvent{

@@ -69,8 +69,30 @@ func TestMapMessagesEventMessageDeltaCarriesResponseID(t *testing.T) {
 	if err != nil || ignored {
 		t.Fatalf("unexpected delta result: ev=%#v ignored=%v err=%v", ev, ignored, err)
 	}
+	if ev.Type != unified.StreamEventLifecycle || ev.Completed != nil {
+		t.Fatalf("expected lifecycle-only event, got %#v", ev)
+	}
+	if ev.Lifecycle == nil || ev.Lifecycle.Scope != unified.LifecycleScopeResponse || ev.Lifecycle.Ref.ResponseID != "msg_123" {
+		t.Fatalf("expected response lifecycle ref, got %#v", ev.Lifecycle)
+	}
+}
+
+func TestMapMessagesEventMessageStopProducesCompletedEvent(t *testing.T) {
+	t.Parallel()
+	m := NewMessagesMapper()
+	_, ignored, err := m.MapEvent(&messages.MessageStartEvent{Message: messages.MessageStartPayload{ID: "msg_123", Model: "claude"}})
+	if err != nil || ignored {
+		t.Fatalf("unexpected start result: ignored=%v err=%v", ignored, err)
+	}
+	ev, ignored, err := m.MapEvent(&messages.MessageStopEvent{})
+	if err != nil || ignored {
+		t.Fatalf("unexpected stop result: ev=%#v ignored=%v err=%v", ev, ignored, err)
+	}
 	if ev.Type != unified.StreamEventCompleted || ev.Completed == nil {
 		t.Fatalf("expected completed event, got %#v", ev)
+	}
+	if ev.Completed.StopReason != unified.StopReasonEndTurn {
+		t.Fatalf("expected end_turn stop reason, got %#v", ev.Completed)
 	}
 	if ev.Lifecycle == nil || ev.Lifecycle.Scope != unified.LifecycleScopeResponse || ev.Lifecycle.Ref.ResponseID != "msg_123" {
 		t.Fatalf("expected response lifecycle ref, got %#v", ev.Lifecycle)

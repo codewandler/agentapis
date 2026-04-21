@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.9.1 - 2026-04-21
+
+### Fixed
+
+- emit the unified completed event for Anthropic Messages streams on `message_stop` instead of on `message_delta`
+- preserve response lifecycle completion signaling on `message_delta` while avoiding duplicate completion emission
+- add regression coverage for Messages stream completion ordering in both adapter and client tests
+
 ## v0.9.0 - 2026-04-20
 
 ### Added
