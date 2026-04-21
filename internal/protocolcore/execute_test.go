@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -200,5 +201,22 @@ func TestDefaultHTTPTransportDecompressesGzip(t *testing.T) {
 	}
 	if string(body) != "data: hello\n\n" {
 		t.Fatalf("expected decompressed body, got %q", string(body))
+	}
+}
+
+func TestCloneDefaultClientCopiesTransport(t *testing.T) {
+	t.Parallel()
+
+	cloned := &http.Client{}
+	base := DefaultHTTPClient()
+	*cloned = *base
+	if cloned == base {
+		t.Fatal("expected clone to return a distinct client instance")
+	}
+	if cloned.Transport == nil {
+		t.Fatal("expected cloned transport, got nil")
+	}
+	if reflect.TypeOf(cloned.Transport) != reflect.TypeOf(base.Transport) {
+		t.Fatalf("expected same transport type, got %T vs %T", cloned.Transport, base.Transport)
 	}
 }

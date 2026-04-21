@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.11.0 - 2026-04-21
+
+### Added
+
+- add public `httpx` package exposing `DefaultTransport()`, `DefaultClient()`, and `CloneDefaultClient()` for callers who want to reuse or extend the agentapis default HTTP client
+- add `TestCloneDefaultClientCopiesTransport` test verifying clone behavior
+
 ## v0.10.0 - 2026-04-21
 
 ### Added
