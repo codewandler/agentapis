@@ -3,55 +3,49 @@ package responses
 import "encoding/json"
 
 type Request struct {
-	Model                string          `json:"model"`
-	Input                []Input         `json:"input"`
-	Instructions         string          `json:"instructions,omitempty"`
-	Tools                []Tool          `json:"tools,omitempty"`
-	ToolChoice           any             `json:"tool_choice,omitempty"`
-	Reasoning            *Reasoning      `json:"reasoning,omitempty"`
-	MaxTokens            int             `json:"max_tokens,omitempty"`
-	MaxOutputTokens      int             `json:"max_output_tokens,omitempty"`
-	Temperature          float64         `json:"temperature,omitempty"`
-	TopP                 float64         `json:"top_p,omitempty"`
-	TopK                 int             `json:"top_k,omitempty"`
-	ResponseFormat       *ResponseFormat `json:"response_format,omitempty"`
-	PromptCacheRetention string          `json:"prompt_cache_retention,omitempty"`
-	Stream               bool            `json:"stream"`
-	PreviousResponseID   string          `json:"previous_response_id,omitempty"`
-	Metadata             map[string]any  `json:"metadata,omitempty"`
-	User                 string          `json:"user,omitempty"`
-	Store                bool            `json:"store,omitempty"`
-	ParallelToolCalls    bool            `json:"parallel_tool_calls,omitempty"`
-	PromptCacheKey       string          `json:"prompt_cache_key,omitempty"`
+	Model              string               `json:"model"`
+	Input              InputParam           `json:"input"                       jsonschema:"required"`
+	Instructions       *string              `json:"instructions,omitempty"       jsonschema:"description=System or developer message inserted into model context"`
+	Tools              []ToolParam          `json:"tools,omitempty"`
+	ToolChoice         *ToolChoiceParam     `json:"tool_choice,omitempty"`
+	Reasoning          *Reasoning           `json:"reasoning,omitempty"`
+	MaxOutputTokens    *int                 `json:"max_output_tokens,omitempty"  jsonschema:"minimum=16"`
+	Temperature        *float64             `json:"temperature,omitempty"        jsonschema:"minimum=0,maximum=2,default=1"`
+	TopP               *float64             `json:"top_p,omitempty"              jsonschema:"minimum=0,maximum=1,default=1"`
+	PromptCacheRetention *PromptCacheRetention `json:"prompt_cache_retention,omitempty"`
+	Stream             *bool                `json:"stream,omitempty"             jsonschema:"default=false"`
+	PreviousResponseID *string              `json:"previous_response_id,omitempty" jsonschema:"description=ID of previous response for multi-turn conversations"`
+	Metadata           map[string]string    `json:"metadata,omitempty"           jsonschema:"maxProperties=16"`
+	User               string               `json:"user,omitempty"               jsonschema:"deprecated=true,description=Replaced by safety_identifier and prompt_cache_key"`
+	Store              *bool                `json:"store,omitempty"              jsonschema:"default=true"`
+	ParallelToolCalls  *bool                `json:"parallel_tool_calls,omitempty" jsonschema:"default=true"`
+	PromptCacheKey     string               `json:"prompt_cache_key,omitempty"`
+
+	// New fields from OpenAI Responses API spec:
+	Text              *ResponseTextParam       `json:"text,omitempty"`
+	Truncation        *Truncation              `json:"truncation,omitempty"             jsonschema:"description=auto truncates to fit context window; disabled returns 400. Default: disabled"`
+	Include           []IncludeItem            `json:"include,omitempty"                jsonschema:"description=Additional output data to include in the response"`
+	StreamOptions     *StreamOptions           `json:"stream_options,omitempty"         jsonschema:"description=Streaming options. Only valid when stream=true"`
+	Background        *bool                    `json:"background,omitempty"             jsonschema:"default=false,description=Run the response in the background"`
+	MaxToolCalls      *int                     `json:"max_tool_calls,omitempty"         jsonschema:"description=Maximum total built-in tool calls across the response"`
+	Conversation      *ConversationParam       `json:"conversation,omitempty"           jsonschema:"description=Links response to a conversation. Cannot combine with previous_response_id"`
+	ContextManagement []ContextManagementParam `json:"context_management,omitempty"     jsonschema:"minItems=1"`
+	Prompt            *Prompt                  `json:"prompt,omitempty"                 jsonschema:"description=Reference to a stored prompt template"`
+	SafetyIdentifier  string                   `json:"safety_identifier,omitempty"      jsonschema:"maxLength=64,description=Hashed stable user ID for abuse detection"`
+	ServiceTier       *ServiceTier             `json:"service_tier,omitempty"           jsonschema:"description=Processing tier. Default: auto"`
+	TopLogprobs       *int                     `json:"top_logprobs,omitempty"           jsonschema:"minimum=0,maximum=20"`
+
+	// Extra holds non-serialized adapter state for RequestTransform hooks.
+	// This field is never sent to OpenAI.
+	Extra map[string]any `json:"-"`
 }
 
 type Reasoning struct {
-	Effort  string `json:"effort,omitempty"`
-	Summary string `json:"summary,omitempty"`
+	Effort  *ReasoningEffort  `json:"effort"`
+	Summary *ReasoningSummary `json:"summary"`
 }
 
-type ResponseFormat struct {
-	Type string `json:"type"`
-}
 
-type Input struct {
-	Role      string `json:"role,omitempty"`
-	Content   string `json:"content,omitempty"`
-	Phase     string `json:"phase,omitempty"`
-	Type      string `json:"type,omitempty"`
-	CallID    string `json:"call_id,omitempty"`
-	Name      string `json:"name,omitempty"`
-	Arguments string `json:"arguments,omitempty"`
-	Output    string `json:"output,omitempty"`
-}
-
-type Tool struct {
-	Type        string `json:"type"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Parameters  any    `json:"parameters,omitempty"`
-	Strict      bool   `json:"strict,omitempty"`
-}
 
 type EventMeta struct {
 	Type           string `json:"type"`

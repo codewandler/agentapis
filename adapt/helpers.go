@@ -62,31 +62,33 @@ func cacheHintFromPromptCacheRetention(ret string) *unified.CacheHint {
 	return nil
 }
 
-func metadataToOpenAI(meta *unified.RequestMetadata, extra map[string]any) (string, map[string]any) {
-	user := ""
-	out := cloneAnyMap(extra)
-	if meta != nil {
-		user = meta.User
-		if len(meta.Metadata) > 0 {
-			if out == nil {
-				out = map[string]any{}
-			}
-			for k, v := range meta.Metadata {
-				out[k] = v
-			}
-		}
+// wireUser returns the user identifier for the wire `user` field.
+func wireUser(id *unified.RequestIdentity) string {
+	if id == nil {
+		return ""
 	}
-	if len(out) == 0 {
-		out = nil
-	}
-	return user, out
+	return id.User
 }
 
-func metadataFromOpenAI(user string, raw map[string]any) (*unified.RequestMetadata, map[string]any) {
-	if user == "" && len(raw) == 0 {
-		return nil, nil
+// wireOpenAIMetadata clones explicitly declared OpenAI metadata for the wire.
+// Never contains internal adapter state.
+func wireOpenAIMetadata(m map[string]string) map[string]string {
+	if len(m) == 0 {
+		return nil
 	}
-	return &unified.RequestMetadata{User: user, Metadata: cloneAnyMap(raw)}, nil
+	out := make(map[string]string, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
+}
+
+// identityFromWire reconstructs RequestIdentity from the wire user field.
+func identityFromWire(user string) *unified.RequestIdentity {
+	if user == "" {
+		return nil
+	}
+	return &unified.RequestIdentity{User: user}
 }
 
 func ensureMessagesExtras(r *unified.Request) *unified.MessagesExtras {
@@ -179,4 +181,46 @@ func ensureOllamaExtras(r *unified.Request) *unified.OllamaExtras {
 		r.Extras.Ollama = &unified.OllamaExtras{}
 	}
 	return r.Extras.Ollama
+}
+
+func ptrBool(b bool) *bool       { return &b }
+func ptrInt(i int) *int          { return &i }
+func ptrFloat64(f float64) *float64 { return &f }
+func ptrString(s string) *string { return &s }
+
+func ptrStringIfNonEmpty(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+// wireOpenAIMetadataAny converts map[string]string metadata to map[string]any for
+// wire protocols that use map[string]any (e.g. completions).
+func wireOpenAIMetadataAny(m map[string]string) map[string]any {
+	if len(m) == 0 {
+		return nil
+	}
+	out := make(map[string]any, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
+}
+
+// openAIMetadataFromAny converts wire map[string]any metadata back to map[string]string.
+func openAIMetadataFromAny(m map[string]any) map[string]string {
+	if len(m) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(m))
+	for k, v := range m {
+		if s, ok := v.(string); ok {
+			out[k] = s
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }

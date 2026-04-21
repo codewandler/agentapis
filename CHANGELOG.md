@@ -1,5 +1,57 @@
 # Changelog
 
+## v0.12.0 - 2026-04-22
+
+### Added
+
+- add `responses.DecodeRequest([]byte) (Request, error)` for schema-validated JSON decoding of Responses API requests
+- add `responses.RequestSchema() (json.RawMessage, error)` to export the derived JSON Schema for the Request struct
+- add `responses.RequestValidationError` with per-field `ValidationCause` (JSON pointer path + message)
+- add 12 previously missing fields to `responses.Request`: `Text`, `Truncation`, `Include`, `StreamOptions`, `Background`, `MaxToolCalls`, `Conversation`, `ContextManagement`, `Prompt`, `SafetyIdentifier`, `ServiceTier`, `TopLogprobs`
+- add `responses.InputParam` union type (`string | []InputItem`) replacing the old flat `[]Input`
+- add `responses.InputItem` discriminated wrapper with `InputItemFromMessage`, `InputItemFromFunctionOutput`, `InputItemFromFunctionCall`, `InputItemRaw` constructors
+- add `responses.EasyInputMessage`, `FunctionCallOutput`, `FunctionCallInput` concrete input item types with auto-discriminator constructors
+- add `responses.ToolParam` discriminated wrapper with `ToolFromFunction`, `ToolFromFileSearch`, `ToolFromWebSearch`, `ToolFromMCP`, `ToolFromCodeInterpreter`, `ToolFromImageGen`, `ToolRaw` constructors
+- add `responses.FunctionTool`, `FileSearchTool`, `WebSearchTool`, `MCPTool`, `CodeInterpreterTool`, `ImageGenTool` concrete tool structs
+- add `responses.ToolChoiceParam` union type with `ToolChoiceAuto`, `ToolChoiceRequired`, `ToolChoiceNone`, `ToolChoiceForFunction`, `ToolChoiceForMCP`, `ToolChoiceAllowed` constructors
+- add `responses.TextResponseFormat` with `FormatText`, `FormatJSONObject`, `FormatJSONSchema` constructors
+- add `responses.ConversationParam` with `ConversationByID`, `ConversationObject` constructors
+- add `responses.ResponseTextParam`, `StreamOptions`, `ContextManagementParam`, `Prompt` supporting structs
+- add typed enum aliases with `JSONSchema()` methods: `ReasoningEffort`, `ReasoningSummary`, `PromptCacheRetention`, `ServiceTier`, `Truncation`, `IncludeItem`, `Verbosity`
+- add `JSONSchema()` methods to all union wrapper types (`InputParam`, `ToolParam`, `ToolChoiceParam`, `TextResponseFormat`, `ConversationParam`) for schema-driven validation
+- add `unified.RequestIdentity` replacing `RequestMetadata` for clean user identification
+- add `unified.ResponsesExtras` fields: `ServiceTier`, `Truncation`, `Include`, `Background`, `MaxToolCalls`, `TopLogprobs`, `ConversationID`, `OpenAIMetadata`
+- add `unified.CompletionsExtras.OpenAIMetadata` replacing `ExtraMetadata`
+- add field-coverage comment on `BuildResponsesRequest` documenting every wire field's source
+- add comprehensive round-trip, tool choice, and text format tests in `adapt/responses_request_bridge_test.go`
+- add `docs/specs/` for reference OpenAPI specs and `docs/plans/` for compliance plans
+- add `conversation.Builder.ToolResultWithError` for error-flagged tool results
+
+### Changed
+
+- **BREAKING**: `responses.Request` fields changed to pointer types for correct nullable JSON semantics: `Instructions`, `MaxOutputTokens`, `Temperature`, `TopP`, `Stream`, `PreviousResponseID`, `Store`, `ParallelToolCalls`, `PromptCacheRetention`
+- **BREAKING**: `responses.Request.Input` changed from `[]Input` to `InputParam` (use `InputText()` or `InputItems()` constructors)
+- **BREAKING**: `responses.Request.Tools` changed from `[]Tool` to `[]ToolParam` (use `ToolFromFunction()` etc.)
+- **BREAKING**: `responses.Request.ToolChoice` changed from `any` to `*ToolChoiceParam`
+- **BREAKING**: `responses.Request.Metadata` changed from `map[string]any` to `map[string]string`
+- **BREAKING**: `responses.Reasoning` fields changed to typed pointers (`*ReasoningEffort`, `*ReasoningSummary`)
+- **BREAKING**: `unified.Request.Metadata` renamed to `unified.Request.Identity` (type `*RequestIdentity`)
+- **BREAKING**: `unified.ResponsesExtras.ExtraMetadata` renamed to `OpenAIMetadata` (type `map[string]string`)
+- **BREAKING**: `unified.CompletionsExtras.ExtraMetadata` renamed to `OpenAIMetadata` (type `map[string]string`)
+- internal adapter metadata no longer leaks to the OpenAI wire — clean separation via `wireUser`/`wireOpenAIMetadata`/`identityFromWire` helpers
+- bridge now supports `OutputModeJSONSchema` via `Text.Format` (was previously unsupported/errored)
+- `invopop/jsonschema` and `santhosh-tekuri/jsonschema/v6` promoted from indirect to direct dependencies
+
+### Removed
+
+- **BREAKING**: removed `responses.Request.MaxTokens` (use `MaxOutputTokens`)
+- **BREAKING**: removed `responses.Request.TopK` (not in Responses API spec)
+- **BREAKING**: removed `responses.Request.ResponseFormat` (replaced by `Text.Format`)
+- **BREAKING**: removed `responses.ResponseFormat`, `responses.Input`, `responses.Tool` structs
+- **BREAKING**: removed `unified.RequestMetadata` (replaced by `RequestIdentity`)
+- **BREAKING**: removed `unified.ResponsesExtras.UsedMaxTokenField`
+- removed `metadataToOpenAI`/`metadataFromOpenAI` helpers (replaced by explicit identity/metadata functions)
+
 ## v0.11.0 - 2026-04-21
 
 ### Added

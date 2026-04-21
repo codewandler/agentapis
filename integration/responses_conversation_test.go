@@ -70,10 +70,7 @@ func runResponsesConversationChainingTest(t *testing.T, provider responsesConver
 
 	firstStream, err := protocol.Stream(ctx, responsesapi.Request{
 		Model: provider.model,
-		Input: []responsesapi.Input{{
-			Role:    "user",
-			Content: fmt.Sprintf("For a short conversation-state test, treat this as non-sensitive test data. The reference codeword is %s. Reply with exactly: stored", token),
-		}},
+		Input: responsesapi.InputItems([]responsesapi.InputItem{responsesapi.InputItemFromMessage(responsesapi.NewEasyInputMessage("user", responsesapi.EasyInputContentText(fmt.Sprintf("For a short conversation-state test, treat this as non-sensitive test data. The reference codeword is %s. Reply with exactly: stored", token))))}),
 	})
 	require.NoError(t, err)
 
@@ -83,11 +80,8 @@ func runResponsesConversationChainingTest(t *testing.T, provider responsesConver
 
 	secondStream, err := protocol.Stream(ctx, responsesapi.Request{
 		Model:              provider.model,
-		PreviousResponseID: firstResponseID,
-		Input: []responsesapi.Input{{
-			Role:    "user",
-			Content: "What was the reference codeword from the previous turn? Reply with only that exact codeword.",
-		}},
+		PreviousResponseID: &firstResponseID,
+		Input: responsesapi.InputItems([]responsesapi.InputItem{responsesapi.InputItemFromMessage(responsesapi.NewEasyInputMessage("user", responsesapi.EasyInputContentText("What was the reference codeword from the previous turn? Reply with only that exact codeword.")))}),
 	})
 	require.NoError(t, err)
 

@@ -67,10 +67,9 @@ func BuildCompletionsRequest(r unified.Request, _ ...CompletionsOption) (*comple
 	if retention := promptCacheRetentionFromHint(r.CacheHint); retention != "" {
 		out.PromptCacheRetention = retention
 	}
-	out.User, out.Metadata = metadataToOpenAI(r.Metadata, nil)
+	out.User = wireUser(r.Identity)
 	if cextras != nil {
-		_, out.Metadata = metadataToOpenAI(r.Metadata, cextras.ExtraMetadata)
-		out.User, _ = metadataToOpenAI(r.Metadata, nil)
+		out.Metadata = wireOpenAIMetadataAny(cextras.OpenAIMetadata)
 	}
 
 	for _, t := range r.Tools {
@@ -177,13 +176,9 @@ func RequestFromCompletions(r completions.Request) (unified.Request, error) {
 	if hint := cacheHintFromPromptCacheRetention(r.PromptCacheRetention); hint != nil {
 		u.CacheHint = hint
 	}
-	if meta, extra := metadataFromOpenAI(r.User, r.Metadata); meta != nil {
-		u.Metadata = meta
-		if extra != nil {
-			ensureCompletionsExtras(&u).ExtraMetadata = extra
-		}
-	} else if extra != nil {
-		ensureCompletionsExtras(&u).ExtraMetadata = extra
+	u.Identity = identityFromWire(r.User)
+	if len(r.Metadata) > 0 {
+		ensureCompletionsExtras(&u).OpenAIMetadata = openAIMetadataFromAny(r.Metadata)
 	}
 	if r.PromptCacheRetention != "" {
 		ensureCompletionsExtras(&u).PromptCacheRetention = r.PromptCacheRetention

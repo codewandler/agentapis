@@ -59,7 +59,7 @@ func (c *Client) Stream(ctx context.Context, req Request) (<-chan StreamResult, 
 
 func (c *Client) StreamWithOptions(ctx context.Context, req Request, opts CallOptions) (<-chan StreamResult, error) {
 	wire := req
-	wire.Stream = true
+	wire.Stream = ptrBool(true)
 	for _, transform := range c.requestTransforms {
 		if err := transform(ctx, &wire); err != nil {
 			return nil, fmt.Errorf("transform request: %w", err)

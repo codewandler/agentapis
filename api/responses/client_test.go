@@ -43,7 +43,7 @@ func TestClientStreamAppliesTypedHooks(t *testing.T) {
 		}),
 	)
 
-	stream, err := client.Stream(context.Background(), Request{Model: "alias", Input: []Input{{Role: "user", Content: "hi"}}})
+	stream, err := client.Stream(context.Background(), Request{Model: "alias", Input: InputItems([]InputItem{InputItemFromMessage(NewEasyInputMessage("user", EasyInputContentText("hi")))})})
 	if err != nil {
 		t.Fatalf("Stream() error = %v", err)
 	}

@@ -57,7 +57,7 @@ func BuildMessagesRequest(r unified.Request, opts ...MessagesOption) (*messages.
 	if err := applyMessagesOutput(out, r.Output); err != nil {
 		return nil, err
 	}
-	if err := applyMessagesMetadata(out, r.Metadata, mextras); err != nil {
+	if err := applyMessagesMetadata(out, r.Identity, mextras); err != nil {
 		return nil, err
 	}
 
@@ -165,7 +165,7 @@ func RequestFromMessages(r messages.Request) (unified.Request, error) {
 		}
 	}
 	if r.Metadata != nil && r.Metadata.UserID != "" {
-		u.Metadata = &unified.RequestMetadata{User: r.Metadata.UserID}
+		u.Identity = &unified.RequestIdentity{User: r.Metadata.UserID}
 	}
 	if r.CacheControl != nil {
 		u.CacheHint = cacheHintFromMessages(r.CacheControl)
@@ -364,12 +364,12 @@ func applyMessagesOutput(out *messages.Request, spec *unified.OutputSpec) error 
 	}
 }
 
-func applyMessagesMetadata(out *messages.Request, meta *unified.RequestMetadata, _ *unified.MessagesExtras) error {
-	if meta == nil {
+func applyMessagesMetadata(out *messages.Request, id *unified.RequestIdentity, _ *unified.MessagesExtras) error {
+	if id == nil {
 		return nil
 	}
-	if meta.User != "" {
-		out.Metadata = &messages.Metadata{UserID: meta.User}
+	if id.User != "" {
+		out.Metadata = &messages.Metadata{UserID: id.User}
 	}
 	return nil
 }

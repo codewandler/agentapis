@@ -350,7 +350,7 @@ type Request struct {
 	ToolChoice  ToolChoice       `json:"tool_choice,omitempty"`
 	Effort      Effort           `json:"effort,omitempty"`
 	Thinking    ThinkingMode     `json:"thinking,omitempty"`
-	Metadata    *RequestMetadata `json:"metadata,omitempty"`
+	Identity    *RequestIdentity `json:"identity,omitempty"`
 	CacheHint   *CacheHint       `json:"cache_hint,omitempty"`
 	Extras      RequestExtras    `json:"extras,omitempty"`
 }
@@ -426,9 +426,10 @@ type OutputSpec struct {
 	Schema any        `json:"schema,omitempty"`
 }
 
-type RequestMetadata struct {
-	User     string         `json:"user,omitempty"`
-	Metadata map[string]any `json:"metadata,omitempty"`
+// RequestIdentity carries end-user identification for safety and caching.
+// Maps to the wire `user` or `safety_identifier` fields depending on the backend.
+type RequestIdentity struct {
+	User string `json:"user,omitempty"`
 }
 
 // === Request Extras ===
@@ -462,7 +463,7 @@ type CompletionsExtras struct {
 	Store                bool           `json:"store,omitempty"`
 	ParallelToolCalls    bool           `json:"parallel_tool_calls,omitempty"`
 	ServiceTier          string         `json:"service_tier,omitempty"`
-	ExtraMetadata        map[string]any `json:"extra_metadata,omitempty"`
+	OpenAIMetadata       map[string]string `json:"openai_metadata,omitempty"`
 }
 
 type ResponsesExtras struct {
@@ -473,8 +474,16 @@ type ResponsesExtras struct {
 	Store                bool           `json:"store,omitempty"`
 	ParallelToolCalls    bool           `json:"parallel_tool_calls,omitempty"`
 	UseInstructions      *bool          `json:"use_instructions,omitempty"`
-	UsedMaxTokenField    string         `json:"used_max_token_field,omitempty"`
-	ExtraMetadata        map[string]any `json:"extra_metadata,omitempty"`
+	OpenAIMetadata       map[string]string `json:"openai_metadata,omitempty"`
+
+	// New fields surfacing Responses API capabilities.
+	ServiceTier    string   `json:"service_tier,omitempty"`
+	Truncation     string   `json:"truncation,omitempty"`
+	Include        []string `json:"include,omitempty"`
+	Background     *bool    `json:"background,omitempty"`
+	MaxToolCalls   *int     `json:"max_tool_calls,omitempty"`
+	TopLogprobs    *int     `json:"top_logprobs,omitempty"`
+	ConversationID string   `json:"conversation_id,omitempty"`
 }
 
 type OllamaExtras struct {
